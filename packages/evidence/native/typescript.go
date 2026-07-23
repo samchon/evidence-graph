@@ -450,7 +450,14 @@ func collectTypeScriptDeclarations(
 	for key := range docs {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(left int, right int) bool {
+		leftNode := docs[keys[left]].node
+		rightNode := docs[keys[right]].node
+		if leftNode.Pos() != rightNode.Pos() {
+			return leftNode.Pos() < rightNode.Pos()
+		}
+		return leftNode.End() < rightNode.End()
+	})
 	content := file.Text()
 	sequence := 0
 	for _, key := range keys {

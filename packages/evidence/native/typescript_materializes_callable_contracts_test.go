@@ -36,6 +36,9 @@ export type Options = {
 export function declared(): void {}
 export const arrow = (): void => {};
 export const expression = function (): void {};
+export const parenthesized = (() => {});
+export const asserted = (() => {}) as () => void;
+export const satisfied = (() => {}) satisfies () => void;
 export let mutable = (): void => {};
 export class Service {
   run(): void {}
@@ -92,8 +95,11 @@ class Internal {
 		"Shape",
 		"Shape.width",
 		"arrow",
+		"asserted",
 		"declared",
 		"expression",
+		"parenthesized",
+		"satisfied",
 	}
 	sort.Strings(want)
 	if strings.Join(targets, "\n") != strings.Join(want, "\n") {

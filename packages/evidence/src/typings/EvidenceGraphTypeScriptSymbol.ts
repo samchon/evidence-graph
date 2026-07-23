@@ -10,11 +10,12 @@
  * - `"type"` selects exported interfaces and type aliases. Classes and namespaces
  *   do not become type units.
  * - `"function"` selects exported function declarations, exported `const`
- *   variables initialized with an arrow function or function expression, public
- *   instance and static methods of exported classes, function-valued public
- *   class fields (an arrow/function initializer or direct function type), and
- *   the same callable forms exported from namespaces. Constructors and
- *   accessors are not selected.
+ *   variables initialized with an arrow function or function expression
+ *   (including parentheses and type-only expression wrappers), public instance
+ *   and static methods of exported classes, function-valued public class fields
+ *   (an arrow/function initializer or direct function type), and the same
+ *   callable forms exported from namespaces. Constructors and accessors are not
+ *   selected.
  * - `"property"` selects property signatures declared directly by exported
  *   interfaces and object-shaped type aliases. Class fields and methods are not
  *   property units.

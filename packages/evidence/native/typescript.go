@@ -298,9 +298,21 @@ func isPublicClassMember(node *shimast.Node) bool {
 }
 
 func isFunctionValue(node *shimast.Node) bool {
-	return node != nil &&
-		(node.Kind == shimast.KindArrowFunction ||
-			node.Kind == shimast.KindFunctionExpression)
+	for node != nil {
+		switch node.Kind {
+		case shimast.KindArrowFunction, shimast.KindFunctionExpression:
+			return true
+		case shimast.KindParenthesizedExpression,
+			shimast.KindAsExpression,
+			shimast.KindSatisfiesExpression,
+			shimast.KindNonNullExpression,
+			shimast.KindTypeAssertionExpression:
+			node = node.Expression()
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func collectTypeScriptModule(

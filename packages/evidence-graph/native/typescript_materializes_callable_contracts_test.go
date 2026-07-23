@@ -80,12 +80,15 @@ class Internal {
 	}
 	sort.Strings(targets)
 	want := []string{
+		"Api",
 		"Api.Client.open",
 		"Api.Client.prototype.connect",
 		"Api.fetch",
 		"Api.send",
 		"Options",
 		"Options.enabled",
+		"Outer",
+		"Outer.Inner",
 		"Outer.Inner.nested",
 		"Service.create",
 		"Service.provider",
@@ -100,6 +103,7 @@ class Internal {
 		"asserted",
 		"declared",
 		"expression",
+		"mutable",
 		"parenthesized",
 		"satisfied",
 	}
@@ -272,14 +276,15 @@ export const render = (): void => {};
 
 /**
  * Verifies every TypeScript selector as a graph source: types, callables, and
- * qualified properties each create an independent acknowledgement obligation.
+ * qualified properties each create an acknowledgement obligation, while a
+ * selected type scope covers its property descendants.
  *
  * Inventory inspection alone cannot prove that source filtering preserves all
  * three kinds. This complete graph acknowledges the exact targets after the
  * configured symbol union is applied.
  *
  *  1. Select `"type"`, `"function"`, and `"property"` from one source file.
- *  2. Acknowledge the interface, property, and arrow-function identities.
+ *  2. Acknowledge the interface scope and arrow-function identity.
  *  3. Assert the source selector materializes all three kinds.
  */
 func TestTypeScriptSourceAcceptsEverySymbolKind(t *testing.T) {
@@ -292,7 +297,6 @@ export const draw = (): void => {};
 `,
 		"docs/ledger.md": `<!--
 @evidence Shape The interface is documented.
-@evidence Shape.width The property is documented.
 @evidence draw The callable is documented.
 -->
 `,
@@ -323,6 +327,7 @@ interface LocalType {
 }
 const localFunction = (): void => {};
 const typeOnlyFunction = (): void => {};
+const localValue = 1;
 class LocalClass {
   run(): void {}
 }
@@ -332,6 +337,7 @@ namespace LocalNamespace {
 export {
   LocalType as PublicType,
   localFunction as publicFunction,
+  localValue as publicValue,
   LocalClass as PublicClass,
   LocalNamespace as PublicNamespace,
 };
@@ -354,12 +360,14 @@ export type {
 	sort.Strings(targets)
 	want := []string{
 		"PublicClass.prototype.run",
+		"PublicNamespace",
 		"PublicNamespace.act",
 		"PublicType",
 		"PublicType.field",
 		"TypeOnlyPublicType",
 		"TypeOnlyPublicType.field",
 		"publicFunction",
+		"publicValue",
 	}
 	sort.Strings(want)
 	if strings.Join(targets, "\n") != strings.Join(want, "\n") {

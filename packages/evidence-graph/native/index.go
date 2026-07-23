@@ -93,9 +93,9 @@ func materializeClaimStates(
 			referenceInventories := inventoriesOf(reference.Type, markdown, typescript)
 			referencePaths := matchingInventoryPaths(referenceInventories, reference.Files)
 			referenceState := referenceState{
-				Spec:     reference,
-				Paths:    referencePaths,
-				UnitByID: map[string]*evidenceUnit{},
+				Spec:      reference,
+				Paths:     referencePaths,
+				ScopeByID: map[string]*evidenceUnit{},
 			}
 			if len(referencePaths) == 0 {
 				problems = append(
@@ -104,6 +104,8 @@ func materializeClaimStates(
 				)
 			}
 			selectedInventoryProblem := false
+			availableUnits := map[string]*evidenceUnit{}
+			selectedUnits := map[string]bool{}
 			for _, path := range referencePaths {
 				for _, inventoryProblem := range referenceInventories[path].Problems {
 					if inventoryProblem.Symbol == "*" ||
@@ -112,15 +114,29 @@ func materializeClaimStates(
 					}
 				}
 				for _, unit := range referenceInventories[path].Units {
+					availableUnits[unit.ID] = unit
 					if !reference.Symbols.contains(unit.Symbol) ||
-						referenceState.UnitByID[unit.ID] != nil {
+						selectedUnits[unit.ID] {
 						continue
 					}
-					referenceState.UnitByID[unit.ID] = unit
+					selectedUnits[unit.ID] = true
 					referenceState.Units = append(referenceState.Units, unit)
 				}
 			}
+			for _, unit := range referenceState.Units {
+				for scope := unit; scope != nil; scope = availableUnits[scope.ParentID] {
+					if referenceState.ScopeByID[scope.ID] != nil {
+						break
+					}
+					referenceState.ScopeByID[scope.ID] = scope
+					referenceState.Scopes = append(referenceState.Scopes, scope)
+					if scope.ParentID == "" {
+						break
+					}
+				}
+			}
 			sortUnits(referenceState.Units)
+			sortUnits(referenceState.Scopes)
 			if len(referencePaths) != 0 &&
 				len(referenceState.Units) == 0 &&
 				!selectedInventoryProblem {
@@ -142,7 +158,7 @@ func evaluateEvidenceGraph(states []claimState) []string {
 	markdownTargets := map[string]map[string]*evidenceUnit{}
 	for _, state := range states {
 		for _, reference := range state.References {
-			for _, unit := range reference.Units {
+			for _, unit := range reference.Scopes {
 				if targets[unit.Target] == nil {
 					targets[unit.Target] = map[string]*evidenceUnit{}
 				}
@@ -213,14 +229,15 @@ func evaluateEvidenceGraph(states []claimState) []string {
 			}
 			acknowledged := map[string]*evidenceDeclaration{}
 			for _, declaration := range state.Declarations {
-				unitID := resolved[declaration.ID]
-				unit := reference.UnitByID[unitID]
-				if unit == nil {
+				scopeID := resolved[declaration.ID]
+				covered := coveredUnits(reference, scopeID)
+				if len(covered) == 0 {
 					continue
 				}
-				if !state.Spec.Symbols.contains(declaration.Host) {
-					host := declaration.Host
-					if host == "" {
+				hosts := declaration.Hosts
+				if !state.Spec.Symbols.intersects(hosts) {
+					host := hosts.names()
+					if len(hosts) == 0 {
 						host = "unsupported or non-exported declaration"
 					}
 					problems = append(
@@ -229,14 +246,24 @@ func evaluateEvidenceGraph(states []claimState) []string {
 					)
 					continue
 				}
-				if first := acknowledged[unitID]; first != nil {
+				var overlappingUnit *evidenceUnit
+				var firstAcknowledgement *evidenceDeclaration
+				for _, unit := range covered {
+					if first := acknowledged[unit.ID]; first != nil {
+						if overlappingUnit == nil {
+							overlappingUnit = unit
+							firstAcknowledgement = first
+						}
+						continue
+					}
+					acknowledged[unit.ID] = declaration
+				}
+				if overlappingUnit != nil {
 					problems = append(
 						problems,
-						"Duplicate acknowledgement for '"+unit.Target+"' in "+claimLabel(state.Spec)+" "+referenceLabel(reference.Spec)+" at "+declaration.location()+"; the first is at "+first.location()+". Keep exactly one @evidence or @evidenceExclude declaration for this evidence unit in this claim.",
+						"Duplicate acknowledgement for '"+overlappingUnit.Target+"' in "+claimLabel(state.Spec)+" "+referenceLabel(reference.Spec)+" at "+declaration.location()+": scope '"+declaration.Target+"' overlaps the first acknowledgement at "+firstAcknowledgement.location()+". Keep @evidence and @evidenceExclude scopes disjoint within this claim.",
 					)
-					continue
 				}
-				acknowledged[unitID] = declaration
 			}
 			for _, unit := range reference.Units {
 				if acknowledged[unit.ID] != nil {
@@ -250,6 +277,28 @@ func evaluateEvidenceGraph(states []claimState) []string {
 		}
 	}
 	return problems
+}
+
+func coveredUnits(
+	reference referenceState,
+	scopeID string,
+) []*evidenceUnit {
+	if reference.ScopeByID[scopeID] == nil {
+		return nil
+	}
+	covered := []*evidenceUnit{}
+	for _, unit := range reference.Units {
+		for current := unit; current != nil; current = reference.ScopeByID[current.ParentID] {
+			if current.ID == scopeID {
+				covered = append(covered, unit)
+				break
+			}
+			if current.ParentID == "" {
+				break
+			}
+		}
+	}
+	return covered
 }
 
 func declarationCandidates(

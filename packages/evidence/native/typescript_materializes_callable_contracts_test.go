@@ -110,6 +110,49 @@ class Internal {
 }
 
 /**
+ * Verifies TypeScript unit diagnostics point to declaration lines rather than
+ * the beginning of leading trivia.
+ *
+ * AST node full starts may include blank lines and JSDoc. Those positions are
+ * useful for comment attachment but misleading in an ambiguous-target or
+ * missing-acknowledgement diagnostic that names the contract itself.
+ *
+ *  1. Put comments and blank lines before an interface and callable.
+ *  2. Materialize type, property, and function units.
+ *  3. Assert each unit records the line containing its declaration name.
+ */
+func TestTypeScriptUnitLocationsPointToDeclarations(t *testing.T) {
+	inventory := parseTypeScriptInventory(
+		t,
+		"src/contracts.ts",
+		`// File preface.
+
+/** Shape contract. */
+export interface Shape {
+  width: number;
+}
+
+/** Draw contract. */
+export const draw = (): void => {};
+`,
+	)
+	lines := map[string]int{}
+	for _, unit := range inventory.Units {
+		lines[unit.Target] = unit.Line
+	}
+	want := map[string]int{
+		"Shape":       4,
+		"Shape.width": 5,
+		"draw":        9,
+	}
+	for target, expected := range want {
+		if actual := lines[target]; actual != expected {
+			t.Errorf("%s line = %d, want %d", target, actual, expected)
+		}
+	}
+}
+
+/**
  * Verifies TypeScript callable reference hosts: JSDoc on arrow constants,
  * instance methods, static methods, and namespace functions is accepted.
  *

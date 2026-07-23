@@ -412,12 +412,15 @@ func addTypeScriptUnit(
 	})
 }
 
-// lineAtNode is filled accurately when declarations are scanned against the
-// source text. Unit line numbers are diagnostic context only, so a zero value
-// remains safe until then.
+// lineAtNode stores a byte offset until declarations are scanned against the
+// complete source text. A position inside the name is on the declaration
+// itself, while both the parent and name full starts may include leading trivia.
 func lineAtNode(_ string, node *shimast.Node) int {
 	if node == nil {
 		return 0
+	}
+	if name := node.Name(); name != nil && name.End() > 0 {
+		return name.End() - 1
 	}
 	return node.Pos()
 }

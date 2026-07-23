@@ -60,7 +60,7 @@ func scanTypeScriptInventory(
 	unitIDs := map[string]bool{}
 	collectTypeScriptStatements(
 		file.Statements,
-		"",
+		nil,
 		inventory,
 		supportedHosts,
 		unitIDs,
@@ -77,7 +77,7 @@ func scanTypeScriptInventory(
 
 func collectTypeScriptStatements(
 	statements *shimast.NodeList,
-	prefix string,
+	prefix []string,
 	inventory *artifactInventory,
 	supportedHosts map[*shimast.Node]string,
 	unitIDs map[string]bool,
@@ -102,11 +102,11 @@ func collectTypeScriptStatements(
 			}
 			supportedHosts[statement] = "type"
 			for _, name := range targets {
-				target := qualifyTypeScriptName(prefix, name)
-				addTypeScriptUnit(inventory, unitIDs, statement, "type", target)
+				identity := qualifyTypeScriptName(prefix, name)
+				addTypeScriptUnit(inventory, unitIDs, statement, "type", identity)
 				collectPropertyMembers(
 					statement.AsInterfaceDeclaration().Members,
-					target,
+					identity,
 					inventory,
 					supportedHosts,
 					unitIDs,
@@ -124,12 +124,12 @@ func collectTypeScriptStatements(
 			supportedHosts[statement] = "type"
 			alias := statement.AsTypeAliasDeclaration()
 			for _, name := range targets {
-				target := qualifyTypeScriptName(prefix, name)
-				addTypeScriptUnit(inventory, unitIDs, statement, "type", target)
+				identity := qualifyTypeScriptName(prefix, name)
+				addTypeScriptUnit(inventory, unitIDs, statement, "type", identity)
 				if alias.Type != nil && alias.Type.Kind == shimast.KindTypeLiteral {
 					collectPropertyMembers(
 						alias.Type.AsTypeLiteralNode().Members,
-						target,
+						identity,
 						inventory,
 						supportedHosts,
 						unitIDs,
@@ -200,7 +200,7 @@ func collectTypeScriptStatements(
 
 func collectFunctionVariables(
 	statement *shimast.Node,
-	prefix string,
+	prefix []string,
 	exports map[string][]exportedName,
 	inventory *artifactInventory,
 	supportedHosts map[*shimast.Node]string,
@@ -253,7 +253,7 @@ func collectFunctionVariables(
 
 func collectClassCallables(
 	statement *shimast.Node,
-	classTarget string,
+	classIdentity []string,
 	inventory *artifactInventory,
 	supportedHosts map[*shimast.Node]string,
 	unitIDs map[string]bool,
@@ -282,11 +282,11 @@ func collectClassCallables(
 		if memberName == "" {
 			continue
 		}
-		target := classTarget + ".prototype." + memberName
+		identity := qualifyTypeScriptName(classIdentity, "prototype", memberName)
 		if shimast.GetCombinedModifierFlags(member)&shimast.ModifierFlagsStatic != 0 {
-			target = classTarget + "." + memberName
+			identity = qualifyTypeScriptName(classIdentity, memberName)
 		}
-		addTypeScriptUnit(inventory, unitIDs, member, "function", target)
+		addTypeScriptUnit(inventory, unitIDs, member, "function", identity)
 		supportedHosts[member] = "function"
 	}
 }
@@ -328,7 +328,7 @@ func isDirectFunctionType(node *shimast.Node) bool {
 
 func collectTypeScriptModule(
 	node *shimast.Node,
-	qualified string,
+	qualified []string,
 	inventory *artifactInventory,
 	supportedHosts map[*shimast.Node]string,
 	unitIDs map[string]bool,
@@ -367,7 +367,7 @@ func collectTypeScriptModule(
 
 func collectPropertyMembers(
 	members *shimast.NodeList,
-	owner string,
+	owner []string,
 	inventory *artifactInventory,
 	supportedHosts map[*shimast.Node]string,
 	unitIDs map[string]bool,
@@ -383,8 +383,8 @@ func collectPropertyMembers(
 		if name == "" {
 			continue
 		}
-		target := owner + "." + name
-		addTypeScriptUnit(inventory, unitIDs, member, "property", target)
+		identity := qualifyTypeScriptName(owner, name)
+		addTypeScriptUnit(inventory, unitIDs, member, "property", identity)
 		supportedHosts[member] = "property"
 	}
 }
@@ -394,9 +394,10 @@ func addTypeScriptUnit(
 	unitIDs map[string]bool,
 	node *shimast.Node,
 	symbol string,
-	target string,
+	identity []string,
 ) {
-	id := "typescript:" + inventory.Path + ":" + symbol + ":" + target
+	target := strings.Join(identity, ".")
+	id := "typescript:" + inventory.Path + ":" + symbol + ":" + encodeTypeScriptIdentity(identity)
 	if unitIDs[id] {
 		return
 	}
@@ -603,9 +604,20 @@ func declarationName(node *shimast.Node) string {
 	}
 }
 
-func qualifyTypeScriptName(prefix string, name string) string {
-	if prefix == "" {
-		return name
+func qualifyTypeScriptName(prefix []string, names ...string) []string {
+	qualified := make([]string, 0, len(prefix)+len(names))
+	qualified = append(qualified, prefix...)
+	qualified = append(qualified, names...)
+	return qualified
+}
+
+func encodeTypeScriptIdentity(identity []string) string {
+	var builder strings.Builder
+	for _, segment := range identity {
+		builder.WriteString(decimal(len(segment)))
+		builder.WriteByte(':')
+		builder.WriteString(segment)
+		builder.WriteByte(';')
 	}
-	return prefix + "." + name
+	return builder.String()
 }

@@ -500,3 +500,35 @@ export const Shared = (): void => {};
 	}]}`)
 	assertProblemContains(t, bothKinds, "Ambiguous evidence target 'Shared'")
 }
+
+/**
+ * Verifies dotted literal member names do not collapse with qualified class
+ * identities that render to the same public target.
+ *
+ * The displayed target intentionally stays human-readable, but its internal
+ * identity must retain segment boundaries. Otherwise a static literal method
+ * silently overwrites an instance method rather than making the target
+ * ambiguous.
+ *
+ *  1. Export an instance `run` and static `"prototype.run"` method.
+ *  2. Cite their shared displayed target.
+ *  3. Assert resolution sees two distinct callable units.
+ */
+func TestTypeScriptIdentityPreservesLiteralSegmentBoundaries(t *testing.T) {
+	messages := runIndexRule(t, map[string]string{
+		"src/contracts.ts": `export class Service {
+  run(): void {}
+  static "prototype.run"(): void {}
+}
+`,
+		"docs/ledger.md": "<!-- @evidence Service.prototype.run This target cannot choose a callable. -->\n",
+	}, `{"sources":[{
+		"type":"typescript",
+		"files":["src/contracts.ts"],
+		"symbol":"function",
+		"reference":{"type":"markdown","files":["docs/ledger.md"],"symbol":"file"}
+	}]}`)
+	assertProblemContains(t, messages, "Ambiguous evidence target 'Service.prototype.run'")
+	assertProblemContains(t, messages, "src/contracts.ts:2")
+	assertProblemContains(t, messages, "src/contracts.ts:3")
+}

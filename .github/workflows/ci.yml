@@ -47,19 +47,19 @@ jobs:
           path: samchon/ttsc
       - uses: actions/setup-go@v5
         with:
-          go-version-file: samchon/evidence-graph/packages/evidence/go.mod
-          cache-dependency-path: samchon/evidence-graph/packages/evidence/go.sum
+          go-version-file: samchon/evidence-graph/packages/evidence-graph/go.mod
+          cache-dependency-path: samchon/evidence-graph/packages/evidence-graph/go.sum
       - name: gofmt
         working-directory: samchon/evidence-graph
         run: |
-          unformatted=$(gofmt -l packages/evidence/native)
+          unformatted=$(gofmt -l packages/evidence-graph/native)
           if [ -n "$unformatted" ]; then
             echo "These files are not gofmt-clean:"
             echo "$unformatted"
             exit 1
           fi
       - name: go test
-        working-directory: samchon/evidence-graph/packages/evidence
+        working-directory: samchon/evidence-graph/packages/evidence-graph
         run: go test -mod=readonly ./native/
 
   features:
@@ -79,7 +79,7 @@ jobs:
           cache: pnpm
       - uses: actions/setup-go@v5
         with:
-          go-version-file: packages/evidence/go.mod
+          go-version-file: packages/evidence-graph/go.mod
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:features

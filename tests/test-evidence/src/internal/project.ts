@@ -91,7 +91,7 @@ export const createProject = (props: ICreateProjectProps): IEvidenceProject => {
   fs.mkdirSync(path.join(modules, "@samchon"), { recursive: true });
   fs.mkdirSync(path.join(modules, "@ttsc"), { recursive: true });
   linkDirectory(
-    path.resolve(suiteRoot, "..", "..", "packages", "evidence"),
+    path.resolve(suiteRoot, "..", "..", "packages", "evidence-graph"),
     path.join(modules, "@samchon", "evidence-graph"),
   );
   linkDirectory(

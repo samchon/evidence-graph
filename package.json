@@ -6,7 +6,7 @@
   "scripts": {
     "build": "pnpm --filter=./packages/* -r build",
     "format": "prettier --write \"**/*.ts\" \"**/*.md\" && pnpm run format:go",
-    "format:go": "gofmt -w packages/evidence/native",
+    "format:go": "gofmt -w packages/evidence-graph/native",
     "test": "pnpm run build && pnpm run test:go && pnpm run test:features",
     "test:go": "pnpm --filter @samchon/evidence-graph exec go test ./native/",
     "test:features": "pnpm --filter=./tests/test-* -r --workspace-concurrency=1 start",

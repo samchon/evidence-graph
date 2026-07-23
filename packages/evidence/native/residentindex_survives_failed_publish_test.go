@@ -11,8 +11,8 @@ type fakeProjectResults struct{ result rule.ProjectRuleResult }
 
 func (f fakeProjectResults) ProjectResult(string) rule.ProjectRuleResult { return f.result }
 
-// TestResidentIndexSurvivesFailedPublish pins that a still-published index stays
-// usable after the index rule marks itself failed.
+// Verifies that a still-published index stays usable after the index rule marks
+// itself failed.
 //
 // reportAmbiguousAnchors calls ctx.Report for one duplicate heading slug, which
 // flips evidence/index to ProjectRuleFailed even though it goes on to publish a

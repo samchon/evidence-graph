@@ -2,14 +2,18 @@ package evidence
 
 import "testing"
 
-// TestSlugifyStripsNonASCIIPunctuation pins that anchor derivation matches
-// GitHub for headings carrying non-ASCII punctuation, symbols, or emoji.
+// Verifies that anchor derivation matches GitHub for headings carrying
+// non-ASCII punctuation, symbols, or emoji.
 //
 // slugify kept every rune above U+007F, so a curly apostrophe, an em-dash, or an
 // emoji leaked into the anchor — minting an id GitHub never renders, so a
 // citation copied from the rendered page dangled against a section that exists.
 // Non-ASCII letters and digits are still kept, or a non-English heading would be
 // unaddressable.
+//
+//  1. Strip non-ASCII punctuation, symbols, and emoji from derived anchors.
+//  2. Preserve non-ASCII letters used by Latin and CJK headings.
+//  3. Compare every result with the fragment GitHub renders.
 func TestSlugifyStripsNonASCIIPunctuation(t *testing.T) {
 	cases := map[string]string{
 		"Don’t Repeat Yourself":      "dont-repeat-yourself", // curly apostrophe dropped

@@ -2,14 +2,18 @@ package evidence
 
 import "testing"
 
-// TestExemptionReasonSurvivesLineWrap pins that a multi-line exemption comment
-// is read as a reasoned exemption, not a blank one.
+// Verifies that a multi-line exemption comment is read as a reasoned exemption,
+// not a blank one.
 //
 // exemptionOf is line-oriented; when the closing --> falls on a later line it
 // saw no reason on the marker line and returned blank, so coverage told the
 // author "an exemption with no reason" about a reason they plainly wrote. The
 // text after the marker on the first line is the reason; only a marker with
 // nothing after it is blank.
+//
+//  1. Read a reason whose closing marker wrapped onto the next line.
+//  2. Distinguish it from a genuinely blank marker.
+//  3. Confirm the single-line form still parses unchanged.
 func TestExemptionReasonSurvivesLineWrap(t *testing.T) {
 	reason, blank, found := exemptionOf("<!-- evidence-exempt: descriptive, not a behavior")
 	if !found {

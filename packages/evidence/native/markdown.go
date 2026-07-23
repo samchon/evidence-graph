@@ -151,7 +151,10 @@ func exemptionOf(line string) (reason string, blank bool, found bool) {
 // string after the run (```ts), so trailing text is ignored here. Closing is a
 // stricter test — see closesFence.
 func fenceMarker(line string) string {
-	trimmed := strings.TrimLeft(line, " ")
+	trimmed, eligible := fenceLine(line)
+	if !eligible {
+		return ""
+	}
 	for _, char := range []byte{'`', '~'} {
 		count := 0
 		for count < len(trimmed) && trimmed[count] == char {
@@ -173,7 +176,11 @@ func fenceMarker(line string) string {
 // the block early, leak the code after it as headings, and flip fence parity so
 // every real heading later in the file is dropped.
 func closesFence(line, fence string) bool {
-	trimmed := strings.TrimRight(strings.TrimLeft(line, " "), " \t")
+	trimmed, eligible := fenceLine(line)
+	if !eligible {
+		return false
+	}
+	trimmed = strings.TrimRight(trimmed, " \t")
 	if len(trimmed) < len(fence) {
 		return false
 	}
@@ -183,6 +190,21 @@ func closesFence(line, fence string) bool {
 		}
 	}
 	return true
+}
+
+// fenceLine removes the indentation CommonMark permits before an opening or
+// closing fence. Four spaces make an indented code block instead, so treating
+// that line as a fence would flip fence state and either invent headings from
+// code or hide real headings that follow it.
+func fenceLine(line string) (string, bool) {
+	indent := 0
+	for indent < len(line) && line[indent] == ' ' {
+		indent++
+	}
+	if indent > 3 {
+		return "", false
+	}
+	return line[indent:], true
 }
 
 // atxHeadingText returns the text of an ATX heading (`# Title`), with any

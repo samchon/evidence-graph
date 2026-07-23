@@ -64,8 +64,34 @@ const exemptionMarker = "<!-- evidence-exempt:"
 func scanMarkdownSections(content string) []documentSection {
 	sections := []documentSection{}
 	fence := ""
+	exemptionCommentOpen := false
+	exemptionSection := -1
+	exemptionReasonParts := []string{}
 	for index, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimRight(line, "\r")
+
+		if exemptionCommentOpen {
+			part := trimmed
+			if end := strings.Index(part, "-->"); end != -1 {
+				part = part[:end]
+				exemptionCommentOpen = false
+			}
+			if part = strings.TrimSpace(part); part != "" {
+				exemptionReasonParts = append(exemptionReasonParts, part)
+			}
+			if !exemptionCommentOpen {
+				if exemptionSection >= 0 {
+					reason := strings.Join(exemptionReasonParts, " ")
+					sections[exemptionSection].Exemption = reason
+					sections[exemptionSection].ExemptionBlank = reason == ""
+				}
+				exemptionSection = -1
+				exemptionReasonParts = nil
+			}
+			// Everything before the closing marker remains inside the HTML
+			// comment. It cannot declare a heading or change fence state.
+			continue
+		}
 
 		if reason, blank, found := exemptionOf(trimmed); found && fence == "" {
 			// The marker excuses the section it sits under, so it attaches to
@@ -75,6 +101,14 @@ func scanMarkdownSections(content string) []documentSection {
 			if len(sections) > 0 {
 				sections[len(sections)-1].Exemption = reason
 				sections[len(sections)-1].ExemptionBlank = blank
+			}
+			rest := strings.TrimPrefix(strings.TrimSpace(trimmed), exemptionMarker)
+			if !strings.Contains(rest, "-->") {
+				exemptionCommentOpen = true
+				exemptionSection = len(sections) - 1
+				if reason != "" {
+					exemptionReasonParts = []string{reason}
+				}
 			}
 			continue
 		}

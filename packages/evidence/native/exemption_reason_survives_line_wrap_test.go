@@ -35,3 +35,35 @@ func TestExemptionReasonSurvivesLineWrap(t *testing.T) {
 		t.Fatalf("single-line exemption regressed: reason=%q blank=%v found=%v", reason, blank, found)
 	}
 }
+
+// Verifies that an exemption reason may start on the line after its marker
+// without exposing comment content as markdown.
+//
+// Reading only the marker line still labels this form blank, and resuming the
+// normal scanner on the next line lets a reason beginning with `#` become a
+// phantom section. The exemption comment must stay active until `-->`.
+//
+//  1. Start an exemption comment with no first-line reason.
+//  2. Put a heading-shaped reason on the next line and then close the comment.
+//  3. Assert the reason exempts its section and never becomes a section itself.
+func TestExemptionReasonMayStartAfterLineWrap(t *testing.T) {
+	content := "## Design Note\n" +
+		"\n" +
+		"<!-- evidence-exempt:\n" +
+		"# descriptive, not a behavior\n" +
+		"-->\n" +
+		"\n" +
+		"## After The Comment\n"
+
+	sections := scanMarkdownSections(content)
+	if len(sections) != 2 {
+		t.Fatalf("comment content became a section: %+v", sections)
+	}
+	if sections[0].ExemptionBlank ||
+		sections[0].Exemption != "# descriptive, not a behavior" {
+		t.Fatalf("wrapped reason was not attached: %+v", sections[0])
+	}
+	if sections[1].Anchor != "after-the-comment" {
+		t.Fatalf("heading scanning did not resume after the comment: %+v", sections[1])
+	}
+}

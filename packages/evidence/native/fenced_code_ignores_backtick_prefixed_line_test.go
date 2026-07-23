@@ -79,6 +79,43 @@ func TestFencedCodeRequiresAtMostThreeLeadingSpaces(t *testing.T) {
 	}
 }
 
+// Verifies that a backtick in a backtick fence's info string prevents the line
+// from opening a code block, while a tilde fence may still carry one.
+//
+// CommonMark forbids backticks only in a backtick fence's info string. Ignoring
+// that boundary lets an invalid apparent opener hide every real heading until a
+// later backtick run, while rejecting the same text after a tilde would leak
+// headings from a valid code block.
+//
+//  1. Put a real heading after an invalid backtick-fence info string.
+//  2. Put a fake heading inside a valid tilde fence carrying the same string.
+//  3. Assert the real heading is indexed and the fenced fake stays hidden.
+func TestBacktickFenceRejectsBacktickInInfoString(t *testing.T) {
+	invalidBacktickOpener := "## Before Invalid Fence\n" +
+		"\n" +
+		"```lang`invalid\n" +
+		"## After Invalid Fence\n"
+	got := anchorsOf(invalidBacktickOpener)
+	if !got["after-invalid-fence"] {
+		t.Fatal("a backtick in the info string hid a later real heading")
+	}
+
+	validTildeOpener := "## Before Valid Fence\n" +
+		"\n" +
+		"~~~lang`valid\n" +
+		"# Not Real\n" +
+		"~~~\n" +
+		"\n" +
+		"## After Valid Fence\n"
+	got = anchorsOf(validTildeOpener)
+	if got["not-real"] {
+		t.Fatal("a backtick in a tilde fence info string leaked a code heading")
+	}
+	if !got["after-valid-fence"] {
+		t.Fatal("the valid tilde fence failed to restore heading scanning")
+	}
+}
+
 func anchorsOf(content string) map[string]bool {
 	got := map[string]bool{}
 	for _, section := range scanMarkdownSections(content) {

@@ -161,6 +161,13 @@ func fenceMarker(line string) string {
 			count++
 		}
 		if count >= 3 {
+			if char == '`' && strings.Contains(trimmed[count:], "`") {
+				// CommonMark forbids a backtick in a backtick fence's info
+				// string because it would be indistinguishable from inline code.
+				// Treating this invalid opener as a fence would hide every real
+				// heading until another backtick run happened to appear.
+				return ""
+			}
 			return trimmed[:count]
 		}
 	}

@@ -64,8 +64,8 @@ var (
 //     anchor token.
 //  2. Report an unrelated anchor and assert the diagnostic degrades without a
 //     suggestion.
-//  3. Report a one-letter ambiguity and assert both nearest choices are ordered
-//     deterministically.
+//  3. Report one-letter ambiguities and assert deterministic ordering with an
+//     explicit anchor first when distances tie.
 //  4. Remove the proven target range and assert the diagnostic remains but no
 //     speculative edit is attached.
 func TestReferenceSuggestsNearestAnchor(t *testing.T) {
@@ -158,6 +158,37 @@ func TestReferenceSuggestsNearestAnchor(t *testing.T) {
 		if titles[0] != "Change anchor to '#cat'" ||
 			titles[1] != "Change anchor to '#cut'" {
 			t.Errorf("suggestion titles = %v, want cat then cut", titles)
+		}
+	})
+
+	t.Run("explicit anchor wins a distance tie", func(t *testing.T) {
+		capture := &anchorSuggestionCapture{}
+		ctx := rule.NewContext(nil, nil, rule.SeverityError, nil, capture)
+		index := &evidenceIndex{
+			Documents: map[string][]documentSection{
+				"docs/spec.md": {
+					{Anchor: "cat"},
+					{Anchor: "cut", Explicit: true},
+				},
+			},
+		}
+
+		checkDocumentReference(
+			ctx,
+			index,
+			danglingDocumentTag("cot", 20),
+		)
+
+		if len(capture.suggestions) != 2 {
+			t.Fatalf("suggestions = %+v, want both nearest anchors", capture.suggestions)
+		}
+		if capture.suggestions[0].Title != "Change anchor to '#cut'" ||
+			capture.suggestions[1].Title != "Change anchor to '#cat'" {
+			t.Errorf(
+				"suggestion titles = [%s, %s], want explicit cut before derived cat",
+				capture.suggestions[0].Title,
+				capture.suggestions[1].Title,
+			)
 		}
 	})
 

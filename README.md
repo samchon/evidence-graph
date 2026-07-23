@@ -1,53 +1,51 @@
 # `@samchon/evidence-graph`
 
-`@samchon/evidence-graph` defines an evidence graph for [`@ttsc/lint`](https://ttsc.dev). The graph makes a repository state its grounds explicitly: a Markdown section or selected TypeScript symbol becomes an evidence unit, and every configured population that depends on it must either cite it or record why it does not.
+![Logo](og.jpg)
 
-## Before you adopt
+[![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/samchon/evidence-graph/blob/master/LICENSE) [![NPM Version](https://img.shields.io/npm/v/@samchon/evidence-graph.svg)](https://www.npmjs.com/package/@samchon/evidence-graph) [![NPM Downloads](https://img.shields.io/npm/dm/@samchon/evidence-graph.svg)](https://www.npmjs.com/package/@samchon/evidence-graph) [![Build Status](https://github.com/samchon/evidence-graph/workflows/CI/badge.svg)](https://github.com/samchon/evidence-graph/actions?query=workflow%3ACI) [![Discord Badge](https://img.shields.io/badge/discord-samchon-d91965?style=flat&labelColor=5866f2&logo=discord&logoColor=white&link=https://discord.gg/E94XhzrUCZ)](https://discord.gg/E94XhzrUCZ)
 
-This is a `@ttsc/lint` contributor. It requires [`ttsc`](https://ttsc.dev), not stock `tsc` with ESLint. Its Go rules are statically linked into the lint binary on the first build, which can take several minutes with a cold Go cache.
+An evidence graph for the AI coding era: the guardrail for goal mode.
 
-## Install
+Your spec is now a compile error. When Claude Code or Codex runs unattended, the build is the only reviewer left. This plugin puts the spec inside it.
+
+Each `@evidence` citation names its target and states its reason. An agent cannot say "done" without showing where and why. **Silent omission is the one state that cannot exist:**
+
+- **Complete**: every spec section is implemented, or the build fails.
+- **Tested**: every export has a test that claims it by name.
+- **Documented**: every decision that reaches code reaches the docs, and the docs never fall behind.
+- **Honest**: "done" comes with receipts, or not at all.
+- **Integrity**: no citation outlives the thing it cites.
+
+## Setup
+
+### Install
 
 ```bash
-npm i -D @samchon/evidence-graph
+npm install -D typescript ttsc @ttsc/lint
+npm install -D @samchon/evidence-graph
 ```
 
-## Configure the graph
+This is a lint plugin for [`@ttsc/lint`](https://github.com/samchon/ttsc/tree/master/packages/lint). It runs on [`ttsc`](https://github.com/samchon/ttsc), not on stock `tsc` with ESLint. If your build does not run `ttsc` yet, adopt that toolchain first.
 
-`evidence-graph/index` accepts `IEvidenceGraphConfig`. Its `sources` array declares independent evidence populations. A Markdown source contributes selected sections; a TypeScript source contributes selected exported symbols.
+The first build can take several minutes; it links the rule into the lint binary once, and later builds reuse it.
+
+### Configure
 
 ```ts
+// lint.config.ts
 import type { ITtscLintConfig } from "@ttsc/lint";
-import evidenceGraph, {
-  type IEvidenceGraphConfig,
-} from "@samchon/evidence-graph";
+import evidenceGraph, { type IEvidenceGraphConfig } from "@samchon/evidence-graph";
 
 const graph: IEvidenceGraphConfig = {
   sources: [
     {
       type: "markdown",
-      name: "Service specifications",
       files: ["docs/**/*.md"],
-      symbol: ["file", "h1", "h2", "h3", "h4"],
-      reference: [
-        {
-          type: "typescript",
-          files: ["packages/*/src/**/*.ts"],
-        },
-        {
-          type: "markdown",
-          files: ["docs/architecture/**/*.md"],
-        },
-      ],
-    },
-    {
-      type: "typescript",
-      name: "Public contracts",
-      files: ["packages/*/src/**/*.ts"],
-      symbol: ["type", "function"],
+      symbol: ["h2", "h3"],
       reference: {
-        type: "markdown",
-        files: ["docs/**/*.md"],
+        type: "typescript",
+        files: ["src/components/**/*.tsx"],
+        symbol: "function",
       },
     },
   ],
@@ -63,97 +61,190 @@ export default {
 } satisfies ITtscLintConfig;
 ```
 
-## Sources and references
+Register the plugin in `lint.config.ts` and pass the graph declaration as the option of the `evidence-graph/index` rule. This graph reads as one sentence: every H2 and H3 section under `docs` must be cited by a React component under `src`.
 
-Every source owns its own coverage. Two source entries that select the same files are still two separate obligations; they are never merged into a single percentage.
+Violations surface in every `ttsc` build, every `--noEmit` check, and every `ttsx` run. They arrive in the same stream as type errors. No separate CI job.
 
-`reference` is either one reference group or an array of groups. A single group must account for every evidence unit in its source. Each element in an array must independently account for every unit: two 50% groups do not form one 100% group.
+### Compose
 
-References are themselves discriminated by `type`.
+```ts
+const graph: IEvidenceGraphConfig = {
+  sources: [
+    // 1. feature rules force components and tests
+    {
+      type: "markdown",
+      files: ["docs/features/**/*.md"],
+      symbol: ["h2", "h3"],
+      reference: [
+        {
+          type: "typescript",
+          files: ["src/components/**/*.tsx"],
+          symbol: "function",
+        },
+        {
+          type: "typescript",
+          files: ["test/features/**/*.ts"],
+          symbol: "function",
+        },
+      ],
+    },
+    // 2. exported components force tests
+    {
+      type: "typescript",
+      files: ["src/components/**/*.tsx"],
+      symbol: "function",
+      reference: {
+        type: "typescript",
+        files: ["test/features/**/*.ts"],
+        symbol: "function",
+      },
+    },
+    // 3. requirements force architecture documents
+    {
+      type: "markdown",
+      files: ["docs/requirements/**/*.md"],
+      symbol: ["h2", "h3"],
+      reference: { type: "markdown", files: ["docs/architecture/**/*.md"] },
+    },
+  ],
+};
+```
 
-| Reference type | Citing artifact | `files` selects |
+A graph is one `sources` array, and each entry adds an independent obligation:
+
+1. A `reference` array is one obligation per element. Every feature rule must be mirrored by a React component and verified by a test function, each on its own.
+2. TypeScript can owe TypeScript. Every exported component must be claimed by a test, per component instead of a coverage percentage.
+3. Markdown can owe Markdown. Architecture documents must acknowledge every requirement they build on.
+
+### Symbols
+
+| Kind | `symbol` values | Default |
 | --- | --- | --- |
-| `"markdown"` | Markdown sections | Markdown files that must acknowledge the source |
-| `"typescript"` | TypeScript declarations | TypeScript files that must acknowledge the source |
+| `"markdown"` | `"file"`, `"h1"`, `"h2"`, `"h3"`, `"h4"` | `["file", "h1", "h2", "h3", "h4"]` |
+| `"typescript"` | `"type"`, `"function"`, `"property"` | `"type"` for sources, all three for references |
 
-Every reference also has a `symbol` selector: it identifies the document or declaration kinds where `@evidence` may be written. Omit it to select every supported kind — `"file"`, `"h1"`, `"h2"`, `"h3"`, and `"h4"` for Markdown; `"type"`, `"function"`, and `"property"` for TypeScript.
+For TypeScript, `"type"` selects exported interfaces and type aliases, `"function"` selects exported functions, and `"property"` selects properties declared by exported type-level symbols; a property's identity includes its declaring type. A `symbol` array widens what counts as evidence within one source, and it never creates a second obligation.
 
-The separate source and reference types intentionally leave room for additional artifact languages, such as Prisma, without overloading Markdown or TypeScript semantics.
+A reference group uses the same selector to restrict which symbol kinds may host an `@evidence` tag. Omit `symbol` to allow every supported kind.
 
-## Markdown sources
+### File patterns
 
-A Markdown source selects documents and heading sections from matching files. Omit `symbol` to select every supported kind: `"file"`, `"h1"`, `"h2"`, `"h3"`, and `"h4"`. A symbol array expands one source's evidence units; it does not create separate coverage obligations.
+Every `files` property takes project-relative glob patterns, not regular expressions. `*` matches inside one path segment, `**` crosses segments, and `?` matches one character. A bare directory such as `docs` does not select its descendants; write `docs/**` for the subtree.
 
-| Symbol                | Selects                                         |
-| --------------------- | ----------------------------------------------- |
-| `"file"`              | The Markdown document itself                    |
-| `"h1"` through `"h4"` | Sections at the corresponding ATX heading level |
+- `docs/**/*.md` selects every document below `docs`.
+- `backend/src/**/*.ts` selects every backend source file.
+- `frontend/src/components/**/*.tsx` selects every React component.
+- `test/features/**/*.ts` selects every feature test function.
 
-```ts
-{
-  type: "markdown",
-  files: ["docs/**/*.md"],
-  symbol: ["h2", "h3"],
-  reference: {
-    type: "typescript",
-    files: ["packages/*/src/**/*.ts"],
-  },
-}
-```
+## Evidence Tags
 
-A heading-level Markdown citation belongs immediately below the heading it supports. A file-level citation belongs at the document level. `@evidenceExclude` does not identify a graph node, so its location is irrelevant.
+The tags below are not yours to write. Your agent writes them as it implements, and your job is to review the stated reasons.
 
-```md
-## Sale Price {#sale-price}
-
-<!-- @evidence IShoppingSale Sale contract exposes this pricing rule. -->
-
-## Editorial Terminology
-
-<!-- @evidenceExclude This section defines wording only; no artifact implements it. -->
-```
-
-## TypeScript sources
-
-A TypeScript source selects exported symbols from matching files. Omit `symbol` to select exported interfaces and type aliases (`"type"`). A symbol array expands one source's selected evidence units; unlike a `reference` array, it does not create separate coverage obligations.
-
-| Symbol       | Selects                                            |
-| ------------ | -------------------------------------------------- |
-| `"type"`     | Exported interfaces and type aliases               |
-| `"function"` | Exported function declarations                     |
-| `"property"` | Properties declared by exported type-level symbols |
+### Cite
 
 ```ts
-{
-  type: "typescript",
-  files: ["packages/*/src/**/*.ts"],
-  symbol: ["type", "property"],
-  reference: {
-    type: "markdown",
-    files: ["docs/**/*.md"],
-  },
-}
-```
-
-The TypeScript declaration carries its citation in JSDoc, keeping the reason attached to the precise public contract instead of to the surrounding file.
-
-```ts
-/** @evidence docs/sales.md#sale-price This DTO exposes the documented price. */
+/**
+ * @evidence docs/sales.md#sale-price This DTO exposes the documented price.
+ */
 export interface IShoppingSale {
   price: number;
 }
 ```
 
-## File patterns
+A TypeScript declaration cites in its JSDoc. The tag is `@evidence target reason`: the target names one evidence unit, and everything after it is the reason. The reason is required, because a citation that cannot say why it exists is filler.
 
-Every `files` property takes project-relative glob patterns, not regular expressions.
+The target takes four forms, one per evidence unit kind:
 
-- `docs/**/*.md` selects every Markdown file below `docs`.
-- `packages/*/src/**/*.ts` selects TypeScript source files in every package.
-- `specs/v?.md` selects one-character versioned filenames such as `v1.md`.
+| Target | Cites |
+| --- | --- |
+| `docs/sales.md` | A Markdown document |
+| `docs/sales.md#sale-price` | A heading section; the heading declares its anchor with the `{#sale-price}` suffix |
+| `IShoppingSale` | An exported type or function |
+| `IShoppingSale.price` | A property of an exported type |
 
-`*` matches inside one path segment, `**` crosses path segments, and `?` matches one character. A bare directory such as `docs` or `docs/` does not select its descendants; use `docs/**` for the full subtree.
+```tsx
+/**
+ * @evidence docs/sales.md#sale-price Renders the price exactly as the pricing rule defines it.
+ * @evidence docs/discount.md#discount-display Shows the discounted price next to the original.
+ */
+export function SalePrice({ sale }: { sale: IShoppingSale }) {
+  return <strong>{formatPrice(sale.price)}</strong>;
+}
+```
 
-## License
+A React component cites the same way, and one declaration stacks as many `@evidence` tags as the rules it honors. The screen that mirrors a rule names the rule it mirrors. That is how the obligation from `Configure` gets satisfied, one section at a time.
 
-MIT
+```md
+## Sale Price {#sale-price}
+
+<!-- @evidence IShoppingSale Sale contract exposes this pricing rule. -->
+```
+
+A Markdown document cites in an HTML comment, so rendered prose stays clean. A heading-level citation sits right below its heading. A file-level citation sits at the top of the document. The target here is a TypeScript symbol name; this is the shape a graph uses when documentation owes the citations.
+
+```md
+## Editorial Terminology
+
+<!-- @evidenceExclude This section defines wording only; no artifact implements it. -->
+```
+
+`@evidenceExclude` records an intentional non-use. It takes only a reason. Its position does not matter: it exempts its host without becoming a graph node.
+
+In an agent workflow the tags cost nothing extra. The agent writes each citation as it implements. You review the stated reasons instead of reverse-engineering the diff. A misreading also surfaces in that review, because the reason sits beside the exact section it claims to honor.
+
+### Violate
+
+```md
+<!-- docs/discount.md -->
+
+## Coupon Stacking {#coupon-stacking}
+
+At most one seller coupon and one platform coupon may combine on a single order.
+```
+
+```text
+$ npx ttsc --noEmit
+docs/discount.md:3:1 - error TS18110: [evidence-graph/index] Section "docs/discount.md#coupon-stacking" has no citation in reference group "src/components/**/*.tsx".
+
+3 ## Coupon Stacking {#coupon-stacking}
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Found 1 error in docs/discount.md:3
+```
+
+The section exists in the spec, but no React component cites it, so the build fails. Two ways out, both visible in review: implement it and cite the section, or exempt it with an `@evidenceExclude` reason a reviewer can veto.
+
+## Concepts
+
+### Why agents need a gate
+
+An agent's completion report is a claim it grades itself. Type errors guard structure and tests guard behavior, but whether the spec was honored has always been checked by a human reading a diff, and in an unattended run that human is gone.
+
+The evidence graph moves that judgment into the build, the one authority an agent already obeys. A skipped section, a missing test, an undocumented contract: each becomes a diagnostic in the same stream as type errors, so the agent fixes spec drift inside the same loop it uses to fix types. The gate costs the workflow nothing, because the agent writes citations as it implements, and what the human reviews shrinks from the whole diff to the stated reasons.
+
+### Coverage and integrity
+
+The graph makes two promises. Coverage says every evidence unit is claimed by everyone who owes it. Integrity says every claim stays true.
+
+Coverage is counted per obligation, never pooled. A backend that honors a rule and a frontend that forgot it is not a 67% project; it is a compile error naming the exact section the screen ignored. This is deliberate: pooled percentages are how partial use by several consumers masquerades as complete use by the project, and how duplicated business logic drifts apart unnoticed. A test citation is stricter than line coverage for the same reason. Line coverage credits code a test merely passes through, while a citation is an explicit claim of responsibility for a named unit.
+
+Integrity is what survives change. A citation dies with its target, so editing a spec section out of existence breaks every artifact that leaned on it, immediately and by name. Between the two promises, every defect this plugin exists for is either a claim that is missing or a claim that stopped being true.
+
+### Documents that can break
+
+Code has always had reference integrity: rename a function and every caller fails. Documents never had it, which is why they rot. Nothing complains when a spec section goes stale, so no one trusts specs, so no one invests in them.
+
+In an evidence graph a document is a set of claims that other artifacts point at by name. Prose gains the same right to break the build that a type has, and the reverse direction closes the loop: a decision that reaches code before anyone writes it down materializes as an exported symbol, which then demands a document. The spec's gaps are found by the compiler instead of by the next confused reader. Completeness guarded in one direction and breakage in the other, documentation stops aging: it is either current or it stops the build. That is what "docs as spec" needs to become real: not discipline, but a linker.
+
+## Sponsors
+
+[![Sponsors](https://raw.githubusercontent.com/samchon/sponsor-images/refs/heads/master/public/circle.svg)](https://github.com/sponsors/samchon)
+
+Thanks for your support.
+
+Your [donation](https://github.com/sponsors/samchon) encourages `@samchon/evidence-graph` development.
+
+## References
+
+- [`ttsc`](https://github.com/samchon/ttsc): the `typescript-go` toolchain this plugin runs on.
+- [`@ttsc/lint`](https://github.com/samchon/ttsc/tree/master/packages/lint): the lint engine that links this rule into the compiler.

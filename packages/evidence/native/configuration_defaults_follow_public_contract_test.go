@@ -124,3 +124,115 @@ func TestConfigurationRejectsObsoleteAndVacuousShapes(t *testing.T) {
 		t.Fatalf("empty sources were not rejected: %v", problems)
 	}
 }
+
+/**
+ * Verifies malformed runtime JSON cannot slip past the stricter public
+ * configuration boundary.
+ *
+ * TypeScript catches these shapes for typed consumers, but lint configuration
+ * is runtime input and may be JavaScript, generated JSON, or an unchecked cast.
+ * Every required discriminator and non-empty selector therefore needs its own
+ * actionable decoder failure.
+ *
+ *  1. Exercise missing, unknown, unsupported, empty, and absolute-path shapes.
+ *  2. Decode each shape without graph evaluation.
+ *  3. Assert the diagnostic names the violated public boundary.
+ */
+func TestConfigurationRejectsMalformedPublicBoundaries(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "missing options",
+			raw:  "",
+			want: "requires an IEvidenceGraphConfig options object",
+		},
+		{
+			name: "non-object root",
+			raw:  "[]",
+			want: "configuration: expected an object",
+		},
+		{
+			name: "unsupported discriminator",
+			raw: `{"sources":[{
+				"type":"prisma",
+				"files":["schema.prisma"],
+				"reference":{"type":"markdown","files":["docs/**"]}
+			}]}`,
+			want: "unsupported artifact type 'prisma'",
+		},
+		{
+			name: "missing files",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"reference":{"type":"typescript","files":["src/**"]}
+			}]}`,
+			want: "required project-relative glob array is missing",
+		},
+		{
+			name: "empty files",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"files":[],
+				"reference":{"type":"typescript","files":["src/**"]}
+			}]}`,
+			want: "at least one positive glob is required",
+		},
+		{
+			name: "exclusions only",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"files":["!docs/private/**"],
+				"reference":{"type":"typescript","files":["src/**"]}
+			}]}`,
+			want: "files array must contain at least one positive glob",
+		},
+		{
+			name: "absolute files",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"files":["/docs/spec.md"],
+				"reference":{"type":"typescript","files":["src/**"]}
+			}]}`,
+			want: "every files pattern must be project-relative",
+		},
+		{
+			name: "empty symbols",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"files":["docs/**"],
+				"symbol":[],
+				"reference":{"type":"typescript","files":["src/**"]}
+			}]}`,
+			want: "empty symbol array selects no evidence units",
+		},
+		{
+			name: "missing reference",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"files":["docs/**"]
+			}]}`,
+			want: "required reference group is missing",
+		},
+		{
+			name: "unknown source property",
+			raw: `{"sources":[{
+				"type":"markdown",
+				"files":["docs/**"],
+				"documents":["legacy"],
+				"reference":{"type":"typescript","files":["src/**"]}
+			}]}`,
+			want: "sources[0].documents: unknown property",
+		},
+	}
+	for _, entry := range cases {
+		t.Run(entry.name, func(t *testing.T) {
+			_, problems := decodeGraphConfig(json.RawMessage(entry.raw))
+			if !strings.Contains(strings.Join(problems, "\n"), entry.want) {
+				t.Fatalf("expected %q, got %v", entry.want, problems)
+			}
+		})
+	}
+}

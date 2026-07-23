@@ -244,6 +244,32 @@ export interface Ref {}
 }
 
 /**
+ * Verifies generated anchors follow the documented Unicode and punctuation
+ * normalization rather than an ASCII-only shortcut.
+ *
+ * International headings are ordinary evidence units. Dropping their letters
+ * would produce an empty or unrelated target, while retaining punctuation
+ * would contradict the public slug grammar and make citations unpredictable.
+ *
+ *  1. Generate slugs from Korean, accented Latin, punctuation, and whitespace.
+ *  2. Compare the result with the public normalization rules.
+ *  3. Assert meaningful letters remain and separators collapse once.
+ */
+func TestMarkdownGeneratedAnchorsPreserveUnicodeLetters(t *testing.T) {
+	cases := map[string]string{
+		"주문 생성 정책":          "주문-생성-정책",
+		"Résumé / Café":     "résumé-café",
+		"Create---  Order!": "create-order",
+		"snake_case value":  "snake_case-value",
+	}
+	for heading, expected := range cases {
+		if actual := markdownSlug(heading); actual != expected {
+			t.Errorf("markdownSlug(%q) = %q, want %q", heading, actual, expected)
+		}
+	}
+}
+
+/**
  * Verifies whitespace-bearing Markdown paths fail with the target grammar's
  * real repair instead of producing an impossible missing acknowledgement.
  *

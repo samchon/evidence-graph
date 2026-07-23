@@ -6,7 +6,7 @@ import (
 	"github.com/samchon/ttsc/packages/lint/rule"
 )
 
-// TestHintsLayerTriggersLongestWins pins the corpus's trigger layering.
+// Verifies the completion corpus's trigger layering.
 //
 // The three cases are made mutually exclusive by the host's longest-After-wins
 // rule, not by anything in the corpus itself, so the layering is only correct if
@@ -69,7 +69,7 @@ func TestHintsLayerTriggersLongestWins(t *testing.T) {
 	}
 }
 
-// TestHintsRankExplicitAnchorsFirst pins the ordering.
+// Verifies that explicit anchors rank before derived anchors.
 //
 // Slice order is the only ranking channel a serialized corpus has. An explicit
 // `{#id}` survives an edit to the heading text and a derived anchor does not, so
@@ -102,11 +102,14 @@ func TestHintsRankExplicitAnchorsFirst(t *testing.T) {
 	}
 }
 
-// TestHintsWithoutStateStaySilent pins the failed-assertion path.
+// Verifies that an absent or unreadable index state publishes no hints.
 //
 // The host calls Hints only for a rule that passed and published, so a state
 // this rule cannot read means it published something other than it believes.
 // Returning a corpus anyway would complete against facts nothing established.
+//
+//  1. Ask for hints with no state and with a state of the wrong type.
+//  2. Assert both calls stay silent instead of inventing a corpus.
 func TestHintsWithoutStateStaySilent(t *testing.T) {
 	if hints := (indexRule{}).Hints(&rule.HintContext{State: nil}); hints != nil {
 		t.Errorf("a nil state produced %d hints, want none", len(hints))

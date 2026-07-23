@@ -115,6 +115,8 @@ The Markdown discriminator controls parsing, not the filename extension. Every m
 
 Heading targets use `<path>#<anchor>`. An explicit `{#anchor}` suffix is the most stable choice; otherwise the rule generates a lowercase slug from the heading text.
 
+Because declarations separate target from reason at whitespace, Markdown source paths cannot contain whitespace. The rule reports a direct rename diagnostic instead of creating an unwriteable target.
+
 ```ts
 {
   type: "markdown",

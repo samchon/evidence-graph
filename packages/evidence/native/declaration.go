@@ -1,6 +1,9 @@
 package evidence
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 type parsedDeclaration struct {
 	Tag        tagKind
@@ -11,6 +14,7 @@ type parsedDeclaration struct {
 
 func parseDeclarations(comment string) []parsedDeclaration {
 	comment = strings.TrimSpace(comment)
+	jsdoc := strings.HasPrefix(comment, "/**")
 	comment = strings.TrimPrefix(comment, "/**")
 	comment = strings.TrimPrefix(comment, "/*")
 	comment = strings.TrimSuffix(comment, "*/")
@@ -48,7 +52,7 @@ func parseDeclarations(comment string) []parsedDeclaration {
 			}
 			continue
 		}
-		if strings.HasPrefix(line, "@") {
+		if jsdoc && strings.HasPrefix(line, "@") {
 			flush()
 			continue
 		}
@@ -86,7 +90,7 @@ func splitDeclarationBody(body string) (string, string) {
 		return "", ""
 	}
 	for index, char := range body {
-		if char == ' ' || char == '\t' || char == '\r' || char == '\n' {
+		if unicode.IsSpace(char) {
 			return body[:index], strings.TrimSpace(body[index:])
 		}
 	}
@@ -104,6 +108,15 @@ func normalizeTarget(target string) string {
 		}
 	}
 	return target
+}
+
+func containsWhitespace(value string) bool {
+	for _, char := range value {
+		if unicode.IsSpace(char) {
+			return true
+		}
+	}
+	return false
 }
 
 func lineAt(content string, offset int) int {

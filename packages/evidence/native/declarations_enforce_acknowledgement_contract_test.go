@@ -80,6 +80,35 @@ export function ref(): void {}
 }
 
 /**
+ * Verifies Markdown explanation prose is not constrained by JSDoc tag
+ * boundaries.
+ *
+ * A line beginning with `@` starts a new field in JSDoc, but an HTML comment
+ * has no such grammar. The same parser handles both hosts, so it must preserve
+ * an at-prefixed Markdown reason while still stopping at real JSDoc tags.
+ *
+ *  1. Put a Markdown declaration target on one line.
+ *  2. Begin its explanation with an at-prefixed approval marker on the next.
+ *  3. Assert the non-empty explanation satisfies coverage.
+ */
+func TestMarkdownDeclarationReasonMayBeginWithAtSign(t *testing.T) {
+	messages := runIndexRule(t, map[string]string{
+		"docs/spec.md": "## Contract\n",
+		"docs/ref.md": `<!--
+@evidence docs/spec.md#contract
+@architecture approved this adoption.
+-->
+`,
+	}, `{"sources":[{
+		"type":"markdown",
+		"files":["docs/spec.md"],
+		"symbol":"h2",
+		"reference":{"type":"markdown","files":["docs/ref.md"],"symbol":"file"}
+	}]}`)
+	assertNoProblems(t, messages)
+}
+
+/**
  * Verifies ambiguous resolution: two distinct TypeScript declarations with the
  * same public target cannot be selected by declaration order.
  *

@@ -86,7 +86,14 @@ func materializeSourceStates(
 				sourceLabel(source)+" matched no "+string(source.Type)+" files for "+describePatterns(source.Files)+". Fix the project-relative globs; '*' stays within one segment, '**' crosses segments, and a bare directory is not recursive.",
 			)
 		}
+		selectedInventoryProblem := false
 		for _, path := range paths {
+			for _, inventoryProblem := range inventories[path].Problems {
+				if inventoryProblem.Symbol == "*" ||
+					source.Symbols.contains(inventoryProblem.Symbol) {
+					selectedInventoryProblem = true
+				}
+			}
 			for _, unit := range inventories[path].Units {
 				if !source.Symbols.contains(unit.Symbol) || state.UnitByID[unit.ID] != nil {
 					continue
@@ -96,7 +103,9 @@ func materializeSourceStates(
 			}
 		}
 		sortUnits(state.Units)
-		if len(paths) != 0 && len(state.Units) == 0 {
+		if len(paths) != 0 &&
+			len(state.Units) == 0 &&
+			!selectedInventoryProblem {
 			problems = append(
 				problems,
 				sourceLabel(source)+" matched "+decimal(len(paths))+" file(s) but materialized no selected evidence units ("+source.Symbols.names()+"). Select symbol kinds present in those files or correct the source globs.",

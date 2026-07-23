@@ -583,7 +583,11 @@ func declarationName(node *shimast.Node) string {
 	case shimast.KindIdentifier,
 		shimast.KindStringLiteral,
 		shimast.KindNumericLiteral:
-		return node.Text()
+		name := node.Text()
+		if containsWhitespace(name) {
+			return ""
+		}
+		return name
 	default:
 		return ""
 	}

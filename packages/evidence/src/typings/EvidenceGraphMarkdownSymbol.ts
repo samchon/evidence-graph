@@ -15,5 +15,9 @@
  * numbers, and `_` remain; whitespace and `-` collapse to `-`; other
  * punctuation is removed. Two selected headings that produce the same target
  * are ambiguous and need distinct explicit anchors.
+ *
+ * Targets are one whitespace-delimited declaration token. A Markdown source
+ * path therefore cannot contain whitespace; the rule reports such a file with a
+ * rename diagnostic instead of creating an impossible obligation.
  */
 export type EvidenceGraphMarkdownSymbol = "file" | "h1" | "h2" | "h3" | "h4";

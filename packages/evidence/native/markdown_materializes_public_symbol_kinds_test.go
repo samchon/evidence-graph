@@ -242,3 +242,31 @@ export interface Ref {}
 	}]}`)
 	assertNoProblems(t, messages)
 }
+
+/**
+ * Verifies whitespace-bearing Markdown paths fail with the target grammar's
+ * real repair instead of producing an impossible missing acknowledgement.
+ *
+ * Evidence targets are one whitespace-delimited token. A source path containing
+ * spaces cannot be written in `@evidence <target> <reason>`, so materializing it
+ * would create an obligation no declaration can ever satisfy.
+ *
+ *  1. Select a Markdown file whose project-relative path contains a space.
+ *  2. Evaluate it as an H2 evidence source.
+ *  3. Assert the rule asks for a rename and suppresses the generic no-unit error.
+ */
+func TestMarkdownSourceRejectsWhitespaceInTargetPaths(t *testing.T) {
+	messages := runIndexRule(t, map[string]string{
+		"docs/my spec.md": "## Contract\n",
+		"src/ref.ts":      "export interface Ref {}\n",
+	}, `{"sources":[{
+		"type":"markdown",
+		"files":["docs/my spec.md"],
+		"symbol":"h2",
+		"reference":{"type":"typescript","files":["src/ref.ts"],"symbol":"type"}
+	}]}`)
+	assertProblemContains(t, messages, "path contains whitespace")
+	if countProblemsContaining(messages, "materialized no selected evidence units") != 0 {
+		t.Fatalf("generic materialization diagnostic hid the path repair: %v", messages)
+	}
+}

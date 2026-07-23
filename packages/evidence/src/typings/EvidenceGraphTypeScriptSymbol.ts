@@ -27,7 +27,9 @@
  * have no stable target and are not selected. Type properties use
  * `TypeName.property`. Static class callables use `ClassName.method`; instance
  * callables use `ClassName.prototype.method`. Computed names are not selected,
- * even when their expression is a literal.
+ * even when their expression is a literal. Literal names must be
+ * whitespace-free because a declaration target is one whitespace-delimited
+ * token.
  *
  * These targets deliberately omit file paths. If selected files expose the same
  * qualified target, a declaration using that target is ambiguous; rename or

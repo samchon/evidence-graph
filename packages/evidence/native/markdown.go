@@ -79,15 +79,25 @@ func loadMarkdownInventories(
 func scanMarkdownInventory(path string, content string) (*artifactInventory, []string) {
 	inventory := &artifactInventory{Path: path, Type: artifactMarkdown}
 	problems := []string{}
-	inventory.Units = append(inventory.Units, &evidenceUnit{
-		ID:       "markdown:" + path + ":file",
-		Target:   path,
-		Type:     artifactMarkdown,
-		Symbol:   "file",
-		Path:     path,
-		Line:     1,
-		Readable: "Markdown file",
-	})
+	targetablePath := !containsWhitespace(path)
+	if targetablePath {
+		inventory.Units = append(inventory.Units, &evidenceUnit{
+			ID:       "markdown:" + path + ":file",
+			Target:   path,
+			Type:     artifactMarkdown,
+			Symbol:   "file",
+			Path:     path,
+			Line:     1,
+			Readable: "Markdown file",
+		})
+	} else {
+		problem := "Markdown file '" + path + "' cannot form an evidence target because its project-relative path contains whitespace. Rename the file so '@evidence <target> <reason>' can represent its path as one target token."
+		problems = append(problems, problem)
+		inventory.Problems = append(inventory.Problems, inventoryProblem{
+			Symbol:  "*",
+			Message: problem,
+		})
+	}
 
 	lines := strings.Split(content, "\n")
 	hostAtLine := make([]string, len(lines))
@@ -136,7 +146,7 @@ func scanMarkdownInventory(path string, content string) (*artifactInventory, []s
 		level, title, ok := markdownHeading(line)
 		if ok {
 			currentHost = "h" + decimal(level)
-			if level <= 4 {
+			if level <= 4 && targetablePath {
 				title, anchor := markdownHeadingIdentity(title)
 				if anchor == "" {
 					problems = append(
@@ -229,7 +239,7 @@ func selectedByMarkdownSource(
 	for _, source := range config.Sources {
 		if source.Type == artifactMarkdown &&
 			source.Files.matches(path) &&
-			source.Symbols.contains(symbol) {
+			(symbol == "*" || source.Symbols.contains(symbol)) {
 			return true
 		}
 	}

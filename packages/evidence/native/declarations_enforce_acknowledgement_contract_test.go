@@ -138,6 +138,38 @@ func TestDeclarationsRejectAmbiguousTypeScriptTargets(t *testing.T) {
 }
 
 /**
+ * Verifies duplicate Markdown anchors remain distinct source units and make a
+ * declaration target ambiguous.
+ *
+ * Generated or explicit anchors can repeat inside one document. Collapsing
+ * them by target would let one declaration silently acknowledge two different
+ * sections and make heading order decide which source prose the edge means.
+ *
+ *  1. Give two selected headings the same explicit anchor.
+ *  2. Cite that path-and-anchor target once.
+ *  3. Assert resolution reports both sections as ambiguous.
+ */
+func TestDeclarationsRejectDuplicateMarkdownAnchors(t *testing.T) {
+	messages := runIndexRule(t, map[string]string{
+		"docs/spec.md": `## First {#shared}
+## Second {#shared}
+`,
+		"src/ref.ts": `
+/** @evidence docs/spec.md#shared This target cannot choose a section. */
+export interface Ref {}
+`,
+	}, `{"sources":[{
+		"type":"markdown",
+		"files":["docs/spec.md"],
+		"symbol":"h2",
+		"reference":{"type":"typescript","files":["src/ref.ts"],"symbol":"type"}
+	}]}`)
+	assertProblemContains(t, messages, "Ambiguous evidence target 'docs/spec.md#shared'")
+	assertProblemContains(t, messages, "Markdown H2 'First'")
+	assertProblemContains(t, messages, "Markdown H2 'Second'")
+}
+
+/**
  * Verifies reference host scope: a resolvable declaration on an unselected
  * symbol kind does not satisfy coverage.
  *

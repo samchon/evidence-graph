@@ -294,6 +294,35 @@ export type {
 }
 
 /**
+ * Verifies a callable exported through a local alias remains an eligible JSDoc
+ * host, including for an exclusion acknowledgement.
+ *
+ * Source materialization and reference-host selection use the same public
+ * export analysis. Testing only source targets could leave aliased callables
+ * visible as evidence while rejecting declarations attached to them.
+ *
+ *  1. Attach an exclusion to a local arrow-function `const`.
+ *  2. Export that declaration under a public alias.
+ *  3. Assert the function-only reference group accepts the host and exclusion.
+ */
+func TestTypeScriptExportAliasCanHostEvidenceExclusion(t *testing.T) {
+	messages := runIndexRule(t, map[string]string{
+		"docs/spec.md": "## Contract\n",
+		"src/ref.ts": `
+/** @evidenceExclude docs/spec.md#contract This adapter intentionally does not use the contract. */
+const local = (): void => {};
+export { local as publicAdapter };
+`,
+	}, `{"sources":[{
+		"type":"markdown",
+		"files":["docs/spec.md"],
+		"symbol":"h2",
+		"reference":{"type":"typescript","files":["src/ref.ts"],"symbol":"function"}
+	}]}`)
+	assertNoProblems(t, messages)
+}
+
+/**
  * Verifies the TypeScript artifact discriminator does not absorb JavaScript
  * files merely because `allowJs` placed them in the compiler Program.
  *

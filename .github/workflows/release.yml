@@ -16,17 +16,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Checkout lint-plugin-evidence
-        uses: actions/checkout@v4
-        with:
-          path: samchon/lint-plugin-evidence
-
-      - name: Checkout ttsc
-        uses: actions/checkout@v4
-        with:
-          repository: samchon/ttsc
-          ref: v0.20.0
-          path: samchon/ttsc
+      - uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -39,20 +29,17 @@ jobs:
           node-version: 24.x
           registry-url: https://registry.npmjs.org/
           cache: pnpm
-          cache-dependency-path: samchon/lint-plugin-evidence/pnpm-lock.yaml
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: samchon/lint-plugin-evidence/packages/evidence/go.mod
-          cache-dependency-path: samchon/lint-plugin-evidence/packages/evidence/go.sum
+          go-version-file: packages/evidence/go.mod
+          cache-dependency-path: packages/evidence/go.sum
 
       - name: Install dependencies
-        working-directory: samchon/lint-plugin-evidence
         run: pnpm install --frozen-lockfile
 
       - name: Publish to npm
-        working-directory: samchon/lint-plugin-evidence
         run: pnpm run package:latest --no-git-checks --provenance
 
   release:

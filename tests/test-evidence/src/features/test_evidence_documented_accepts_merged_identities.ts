@@ -7,7 +7,8 @@ import {
 } from "../internal/project.ts";
 
 /**
- * Verifies the packaged rule accepts exactly one block per merged identity.
+ * Verifies the packaged rule accepts a merged identity documented at its first
+ * declaration.
  *
  * This is the idiom a consumer meets first, and the one `evidence/singular`
  * blesses by name. Each fixture reaches its first declaration through a
@@ -87,12 +88,12 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
     assertStatus(
       result,
       0,
-      "One block must document a whole merged identity, matching evidence/singular.",
+      "A block on an identity's first declaration must document the whole merge, matching evidence/singular.",
     );
     assertExcludes(
       result,
       "evidence/documented",
-      "No half of a merged identity may be reported separately.",
+      "An identity documented at its first declaration must produce no finding.",
     );
   } finally {
     project.cleanup();

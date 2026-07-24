@@ -136,9 +136,10 @@ type artifactInventory struct {
 	// UnitNodes maps a unit ID to every declaration node that spells it.
 	//
 	// A unit is an identity, not a declaration: declaration merging and overload
-	// sets give one identity several nodes, and the JSDoc that documents it may
-	// sit on any of them. Left nil when a caller has no use for the association,
-	// which keeps the graph's own scan allocating nothing extra.
+	// sets give one identity several nodes. Which of them a rule then cares
+	// about is the rule's own business — this records only that they belong to
+	// one identity. Left nil when a caller has no use for the association, which
+	// keeps the graph's own scan allocating nothing extra.
 	UnitNodes map[string][]*shimast.Node
 }
 

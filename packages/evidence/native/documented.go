@@ -116,9 +116,11 @@ func rejectUnknownDocumentedFields(raw json.RawMessage) []string {
 //
 // The unit judged is an identity, never a declaration node. Declaration merging
 // and overload sets give one identity several nodes — `interface I` beside
-// `namespace I`, a callable beside its signatures — and a block on any of them
-// documents the identity. Judging the nodes instead would demand a second block
-// on the namespace half of the very idiom `evidence/singular` blesses.
+// `namespace I`, a callable beside its signatures — and judging the nodes would
+// demand a block on every half of the very idiom `evidence/singular` blesses.
+//
+// Nodes holds them in source order, so Node is the declaration that founds the
+// identity and the only one the rule reads.
 type documentedHost struct {
 	Node    *shimast.Node
 	Nodes   []*shimast.Node
@@ -239,11 +241,12 @@ func orderIdentityDeclarations(hosts []documentedHost) []documentedHost {
 //
 // Two forms reach the same identity without being units. `export default x`
 // declares nothing, and a class or enum declaration is deliberately not a type
-// unit — yet each is a second place a block can sit above one name, and
-// `evidence/singular` already counts those pairs as one identity. Without this
-// the duplicate rule would be blind to the merged forms authors reach for most,
-// and a block written on the class half of `class C` / `namespace C` would read
-// as no documentation at all.
+// unit — yet either can be the declaration a reader meets first, and
+// `evidence/singular` already counts those pairs as one identity. The
+// first-declaration test can only see what is in the identity's node set, so
+// without this fold a block written on the class half of `class C` /
+// `namespace C` would read as no documentation at all and the namespace half
+// would be reported instead.
 //
 // Only module-scope declarations are folded, which is where every one of these
 // forms is written. A namespace nested inside another is left to the qualified

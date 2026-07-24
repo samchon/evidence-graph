@@ -16,6 +16,13 @@ export * from "./typings/index";
  * {@link IEvidenceGraphConfig} that describes which documents and TypeScript
  * symbols must remain connected.
  *
+ * The plugin contributes two rules.
+ *
+ * - `"evidence/graph"` — the configured evidence graph: every declaration target
+ *   must resolve, and every selected evidence unit must be acknowledged.
+ * - `"evidence/singular"` — one public identity per TypeScript file, named after
+ *   the file. Takes no options.
+ *
  * @example <caption>Configure the plugin in `lint.config.ts`</caption>
  *   import type { ITtscLintConfig } from "@ttsc/lint";
  *   import {
@@ -51,7 +58,7 @@ export const evidence = {
     namespace: "evidence",
     version,
   } as const,
-  rules: ["graph"] as const,
+  rules: ["graph", "singular"] as const,
   source: path.resolve(__dirname, "..", "native"),
 } satisfies ITtscLintPlugin;
 export default evidence;

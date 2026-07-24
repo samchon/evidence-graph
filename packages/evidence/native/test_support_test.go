@@ -84,6 +84,101 @@ func runIndexRule(
 	return reporter.messages
 }
 
+// capturedFileReporter records what a file rule reported.
+//
+// Both reporter interfaces are implemented together because Go interface
+// satisfaction is all-or-nothing: a fake missing the fix half silently stops
+// being a FixReporter, and the rule's findings would vanish from the capture.
+type capturedFileReporter struct {
+	messages []string
+}
+
+func (reporter *capturedFileReporter) Report(
+	_ *shimast.Node,
+	message string,
+) {
+	reporter.messages = append(reporter.messages, message)
+}
+
+func (reporter *capturedFileReporter) ReportRange(
+	_ int,
+	_ int,
+	message string,
+) {
+	reporter.messages = append(reporter.messages, message)
+}
+
+func (reporter *capturedFileReporter) ReportFix(
+	_ *shimast.Node,
+	message string,
+	_ ...rule.TextEdit,
+) {
+	reporter.messages = append(reporter.messages, message)
+}
+
+func (reporter *capturedFileReporter) ReportRangeFix(
+	_ int,
+	_ int,
+	message string,
+	_ ...rule.TextEdit,
+) {
+	reporter.messages = append(reporter.messages, message)
+}
+
+var _ rule.Reporter = &capturedFileReporter{}
+var _ rule.FixReporter = &capturedFileReporter{}
+
+func parseTestSourceFile(
+	t *testing.T,
+	path string,
+	content string,
+) *shimast.SourceFile {
+	t.Helper()
+	absolute := filepath.ToSlash(filepath.Join(t.TempDir(), filepath.FromSlash(path)))
+	kind := shimcore.ScriptKindTS
+	if strings.HasSuffix(strings.ToLower(path), ".tsx") {
+		kind = shimcore.ScriptKindTSX
+	}
+	return shimparser.ParseSourceFile(
+		shimast.SourceFileParseOptions{FileName: absolute},
+		content,
+		kind,
+	)
+}
+
+func runSingularRule(t *testing.T, path string, content string) []string {
+	t.Helper()
+	file := parseTestSourceFile(t, path, content)
+	reporter := &capturedFileReporter{}
+	singularRule{}.Check(
+		rule.NewContext(file, nil, rule.SeverityError, nil, reporter),
+		file.AsNode(),
+	)
+	return reporter.messages
+}
+
+func assertSilent(t *testing.T, messages []string) {
+	t.Helper()
+	if len(messages) != 0 {
+		t.Fatalf("expected no diagnostics, got:\n%s", strings.Join(messages, "\n"))
+	}
+}
+
+func assertReported(t *testing.T, messages []string, expected string) {
+	t.Helper()
+	if len(messages) != 1 {
+		t.Fatalf(
+			"expected exactly one diagnostic containing %q, got %d:\n%s",
+			expected,
+			len(messages),
+			strings.Join(messages, "\n"),
+		)
+	}
+	if !strings.Contains(messages[0], expected) {
+		t.Fatalf("expected diagnostic containing %q, got:\n%s", expected, messages[0])
+	}
+}
+
 func isTypeScriptTestPath(path string) bool {
 	path = strings.ToLower(path)
 	for _, extension := range []string{".ts", ".tsx", ".mts", ".cts"} {

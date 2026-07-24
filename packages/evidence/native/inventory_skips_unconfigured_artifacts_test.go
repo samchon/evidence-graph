@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func decodeMeasuredConfig(t *testing.T, raw string) graphConfig {
+func decodeInventoryConfig(t *testing.T, raw string) graphConfig {
 	t.Helper()
 	config, problems := decodeGraphConfig(json.RawMessage(raw))
 	if len(problems) != 0 {
@@ -42,7 +42,7 @@ func writeInventoryFixture(t *testing.T, relative string, content string) string
  */
 func TestMarkdownIsNotIndexedWithoutAMarkdownReference(t *testing.T) {
 	root := writeInventoryFixture(t, "docs/spec.md", "## Pricing {#pricing}\n")
-	inventories, problems := loadMarkdownInventories(root, decodeMeasuredConfig(t, `{"claims":[{
+	inventories, problems := loadMarkdownInventories(root, decodeInventoryConfig(t, `{"claims":[{
 		"type":"typescript",
 		"files":["src/**"],
 		"reference":{"type":"typescript","files":["src/**"]}
@@ -68,7 +68,7 @@ func TestMarkdownIsNotIndexedWithoutAMarkdownReference(t *testing.T) {
  */
 func TestMarkdownIsIndexedWhenReferenced(t *testing.T) {
 	root := writeInventoryFixture(t, "docs/spec.md", "## Pricing {#pricing}\n")
-	inventories, problems := loadMarkdownInventories(root, decodeMeasuredConfig(t, `{"claims":[{
+	inventories, problems := loadMarkdownInventories(root, decodeInventoryConfig(t, `{"claims":[{
 		"type":"typescript",
 		"files":["src/**"],
 		"reference":{"type":"markdown","files":["docs/**/*.md"],"symbol":"h2"}
@@ -95,7 +95,7 @@ func TestMarkdownIsIndexedWhenReferenced(t *testing.T) {
  *  3. Assert only the reachable directory may be descended.
  */
 func TestMarkdownWalkPrunesUnreachableDirectories(t *testing.T) {
-	config := decodeMeasuredConfig(t, `{"claims":[{
+	config := decodeInventoryConfig(t, `{"claims":[{
 		"type":"typescript",
 		"files":["src/**"],
 		"reference":{"type":"markdown","files":["docs/**/*.md"],"symbol":"h2"}
@@ -125,7 +125,7 @@ func TestMarkdownWalkPrunesUnreachableDirectories(t *testing.T) {
  *  3. Assert every one of them is pruned.
  */
 func TestMarkdownWalkPrunesEverythingWithoutAMarkdownReference(t *testing.T) {
-	config := decodeMeasuredConfig(t, `{"claims":[{
+	config := decodeInventoryConfig(t, `{"claims":[{
 		"type":"typescript",
 		"files":["src/**"],
 		"reference":{"type":"typescript","files":["src/**"]}
@@ -156,7 +156,7 @@ func TestMarkdownWalkPrunesEverythingWithoutAMarkdownReference(t *testing.T) {
 func TestSwaggerNormalizerIsNotSpawnedWithoutASwaggerReference(t *testing.T) {
 	t.Setenv("TTSC_NODE_BINARY", filepath.Join(t.TempDir(), "node-that-does-not-exist"))
 	root := writeInventoryFixture(t, "docs/spec.md", "## Pricing {#pricing}\n")
-	inventories, problems := loadSwaggerInventories(root, decodeMeasuredConfig(t, `{"claims":[{
+	inventories, problems := loadSwaggerInventories(root, decodeInventoryConfig(t, `{"claims":[{
 		"type":"typescript",
 		"files":["src/**"],
 		"reference":{"type":"markdown","files":["docs/**/*.md"],"symbol":"h2"}
@@ -184,7 +184,7 @@ func TestSwaggerNormalizerIsNotSpawnedWithoutASwaggerReference(t *testing.T) {
 func TestSwaggerNormalizerIsSpawnedWhenReferenced(t *testing.T) {
 	t.Setenv("TTSC_NODE_BINARY", filepath.Join(t.TempDir(), "node-that-does-not-exist"))
 	root := writeInventoryFixture(t, "swagger.json", `{"openapi":"3.1.0","paths":{}}`)
-	inventories, problems := loadSwaggerInventories(root, decodeMeasuredConfig(t, `{"claims":[{
+	inventories, problems := loadSwaggerInventories(root, decodeInventoryConfig(t, `{"claims":[{
 		"type":"typescript",
 		"files":["src/**"],
 		"reference":{"type":"swagger","file":"swagger.json"}

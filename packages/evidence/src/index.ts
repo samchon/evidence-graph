@@ -16,11 +16,13 @@ export * from "./typings/index";
  * {@link IEvidenceGraphConfig} that describes which documents and TypeScript
  * symbols must remain connected.
  *
- * The plugin contributes two rules, enabled independently.
+ * The plugin contributes three rules, enabled independently.
  *
  * - `"evidence/graph"` — the configured evidence graph. Every declaration target
  *   must resolve, and every selected evidence unit must be acknowledged. Takes
- *   an {@link IEvidenceGraphConfig}.
+ *   an {@link IEvidenceGraphConfig}. It also offers the configured targets as
+ *   editor completions, on the cycles where it passes: the host publishes a
+ *   rule's completions only while that rule reports nothing.
  * - `"evidence/singular"` — one public identity per TypeScript file, named after
  *   the file. Takes no options, so it carries a bare severity.
  * - `"evidence/documented"` — a JSDoc block on every selected export, which is

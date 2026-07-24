@@ -34,6 +34,93 @@ func (reporter *capturedProjectReporter) SetState(state any) {
 	reporter.state = state
 }
 
+// runGraphHints drives the graph rule and returns the corpus a consumer would
+// actually receive, together with whatever the rule reported.
+//
+// The gate is reproduced here rather than bypassed. `linthost/hints.go:147-149`
+// skips a rule whose snapshot is not `ProjectRulePassed` or whose state is nil,
+// and `projectReporter.Report` marks a rule failed unconditionally
+// (`linthost/project_engine.go:68-77`). Calling `Hints` directly would answer a
+// question no editor asks — what the rule *could* publish — while the behavior
+// under test is what an author sees, which is nothing on the cycle an
+// obligation goes unmet.
+func runGraphHints(
+	t *testing.T,
+	files map[string]string,
+	config string,
+) ([]rule.Hint, []string) {
+	t.Helper()
+	root := t.TempDir()
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	sources := []*shimast.SourceFile{}
+	for _, relative := range paths {
+		content := files[relative]
+		absolute := filepath.Join(root, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(absolute, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if !isTypeScriptTestPath(relative) {
+			continue
+		}
+		kind := shimcore.ScriptKindTS
+		if strings.HasSuffix(strings.ToLower(relative), ".tsx") {
+			kind = shimcore.ScriptKindTSX
+		}
+		sources = append(sources, shimparser.ParseSourceFile(
+			shimast.SourceFileParseOptions{FileName: filepath.ToSlash(absolute)},
+			content,
+			kind,
+		))
+	}
+	reporter := &capturedProjectReporter{}
+	context := rule.NewProjectContext(
+		rule.ProjectIdentity{PhysicalProjectRoot: root},
+		sources,
+		nil,
+		rule.SeverityError,
+		json.RawMessage(config),
+		reporter,
+	)
+	graphRule{}.Check(context)
+	if reporter.failed || reporter.state == nil {
+		return nil, reporter.messages
+	}
+	hints := graphRule{}.Hints(&rule.HintContext{
+		Identity: rule.ProjectIdentity{PhysicalProjectRoot: root},
+		State:    reporter.state,
+		Severity: rule.SeverityError,
+		Options:  json.RawMessage(config),
+	})
+	return hints, reporter.messages
+}
+
+// targetHintsAt narrows a corpus to one trigger, preserving published order.
+func targetHintsAt(hints []rule.Hint, after string) []rule.Hint {
+	narrowed := []rule.Hint{}
+	for _, hint := range hints {
+		if hint.Trigger.After == after {
+			narrowed = append(narrowed, hint)
+		}
+	}
+	return narrowed
+}
+
+// targetInserts lists what a corpus would insert, in offered order.
+func targetInserts(hints []rule.Hint) []string {
+	inserts := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		inserts = append(inserts, hint.Insert)
+	}
+	return inserts
+}
+
 func runIndexRule(
 	t *testing.T,
 	files map[string]string,

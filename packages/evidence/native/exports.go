@@ -190,6 +190,27 @@ func traverseEntryExports(
 		return nil
 	}
 	reached := []reachedSymbol{}
+	// Named re-exports are grouped by the module they come from and that module
+	// is walked once. Walking it per specifier would re-traverse the whole
+	// subtree for every name a barrel forwards, which is quadratic on exactly
+	// the wide generated barrels this selection exists to describe.
+	surfaces := map[string]map[string]reachedSymbol{}
+	surfaceOf := func(target string) map[string]reachedSymbol {
+		if surface, built := surfaces[target]; built {
+			return surface
+		}
+		surface := map[string]reachedSymbol{}
+		for _, nested := range traverseEntryExports(loader, target, nil, visited) {
+			if len(nested.Address) != 1 {
+				continue
+			}
+			if _, taken := surface[nested.Address[0]]; !taken {
+				surface[nested.Address[0]] = nested
+			}
+		}
+		surfaces[target] = surface
+		return surface
+	}
 	for _, export := range inventory.Exports {
 		if export.Specifier == "" {
 			reached = append(reached, reachedSymbol{
@@ -219,16 +240,15 @@ func traverseEntryExports(
 				visited,
 			)...)
 		default:
-			for _, nested := range traverseEntryExports(loader, target, nil, visited) {
-				if len(nested.Address) != 1 || nested.Address[0] != export.Imported {
-					continue
-				}
-				reached = append(reached, reachedSymbol{
-					Address: append(append([]string{}, prefix...), export.Public),
-					Path:    nested.Path,
-					Local:   nested.Local,
-				})
+			nested, found := surfaceOf(target)[export.Imported]
+			if !found {
+				continue
 			}
+			reached = append(reached, reachedSymbol{
+				Address: append(append([]string{}, prefix...), export.Public),
+				Path:    nested.Path,
+				Local:   nested.Local,
+			})
 		}
 	}
 	return reached

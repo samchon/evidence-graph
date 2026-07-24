@@ -326,7 +326,7 @@ func collectTypeScriptVariables(
 			}
 			addTypeScriptHost(supportedHosts, declaration, symbol)
 			for _, name := range targets {
-				addTypeScriptUnit(
+				unit := addTypeScriptUnit(
 					inventory,
 					unitsByID,
 					binding,
@@ -334,6 +334,10 @@ func collectTypeScriptVariables(
 					qualifyTypeScriptName(prefix, name),
 					parentID,
 				)
+				// The binding names the unit, but TypeScript attaches a
+				// variable's leading JSDoc to the statement wrapper, so that
+				// is where a citation for this unit actually lives.
+				inventory.recordUnitNode(unit.ID, statement)
 			}
 			found[symbol] = true
 		}
@@ -517,6 +521,11 @@ func addTypeScriptUnit(
 ) *evidenceUnit {
 	target := strings.Join(identity, ".")
 	id := "typescript:" + inventory.Path + ":" + symbol + ":" + encodeTypeScriptIdentity(identity)
+	// Recorded before the dedupe below, so a merged identity keeps every
+	// declaration that spells it. `interface I` beside `namespace I` is one
+	// unit and two nodes, and a rule asking where that unit's JSDoc may live
+	// has to see both.
+	inventory.recordUnitNode(id, node)
 	if unit := unitsByID[id]; unit != nil {
 		return unit
 	}

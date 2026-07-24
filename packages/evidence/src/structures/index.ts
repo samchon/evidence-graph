@@ -1,3 +1,4 @@
+export * from "./IEvidenceDocumentedConfig";
 export * from "./IEvidenceGraphClaim";
 export * from "./IEvidenceGraphConfig";
 export * from "./IEvidenceGraphMarkdownClaim";

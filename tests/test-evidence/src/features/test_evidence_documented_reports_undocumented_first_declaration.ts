@@ -1,0 +1,99 @@
+import {
+  assertFailure,
+  assertIncludes,
+  createProject,
+  runCheck,
+  type IEvidenceProject,
+} from "../internal/project.ts";
+
+/**
+ * Verifies the packaged rule fails a build when only a later half of a merged
+ * identity carries a block.
+ *
+ * This is the case that pins "the first declaration that can host a citation is
+ * the basis" rather than "a block anywhere will do", and it is the firing twin
+ * of the accepting fixture — without it, a rule that had stopped reading
+ * placement entirely would look identical. The class fixture is the sharp one:
+ * a class hosts nothing, so a block above it documents no type at all, and this
+ * is the shape where the rule could most easily send a citation somewhere
+ * `evidence/graph` refuses it.
+ *
+ * 1. Document the namespace half of an interface merge, the class half of a class
+ *    merge, and the default export rather than its const.
+ * 2. Enable `evidence/documented` with the default selection.
+ * 3. Assert a non-zero exit naming each identity.
+ */
+export const test_evidence_documented_reports_undocumented_first_declaration =
+  (): void => {
+    const project: IEvidenceProject = createProject({
+      name: "documented-first",
+      include: ["src"],
+      lintConfig: [
+        'import { evidence } from "@samchon/lint-plugin-evidence";',
+        "",
+        "export default {",
+        '  plugins: { "evidence": evidence },',
+        "  rules: {",
+        '    "evidence/documented": "error",',
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+      files: {
+        "src/ISale.ts": [
+          "export interface ISale {",
+          "  /** Identifier of the sale. */",
+          "  id: string;",
+          "}",
+          "/** A sale offered to a customer. */",
+          "export namespace ISale {",
+          "  /** Creation input. */",
+          "  export interface ICreate {",
+          "    /** Identifier of the sale. */",
+          "    id: string;",
+          "  }",
+          "}",
+          "",
+        ].join("\n"),
+        "src/Something.ts": [
+          "/** The exported service. */",
+          "export class Something {}",
+          "export namespace Something {",
+          "  /** Current version. */",
+          '  export const version = "1";',
+          "}",
+          "",
+        ].join("\n"),
+        "src/evidence.ts": [
+          'export const evidence = { name: "evidence" };',
+          "/** The exported plugin descriptor. */",
+          "export default evidence;",
+          "",
+        ].join("\n"),
+      },
+    });
+    try {
+      const result = runCheck(project.directory);
+      assertFailure(
+        result,
+        "A block on a later half must not satisfy the first declaration.",
+      );
+      assertIncludes(
+        result,
+        "Missing JSDoc on exported type 'ISale'",
+        "The interface comes first, so it is the identity's basis.",
+      );
+      assertIncludes(
+        result,
+        "Missing JSDoc on exported type 'Something'",
+        "A class hosts no citation, so a block above it cannot document the type its namespace materializes.",
+      );
+      assertIncludes(
+        result,
+        "Missing JSDoc on exported property 'evidence'",
+        "A const founds the identity its default export re-exposes.",
+      );
+    } finally {
+      project.cleanup();
+    }
+  };

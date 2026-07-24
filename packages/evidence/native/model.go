@@ -3,11 +3,15 @@ package evidence
 import (
 	"sort"
 	"strings"
+
+	shimast "github.com/microsoft/typescript-go/shim/ast"
 )
 
 const graphRuleName = "evidence/graph"
 
 const singularRuleName = "evidence/singular"
+
+const documentedRuleName = "evidence/documented"
 
 type artifactKind string
 
@@ -129,6 +133,21 @@ type artifactInventory struct {
 	// an inline-link target can be resolved the way TypeScript resolves a name:
 	// from the citing file's own bindings rather than from a global table.
 	Imports map[string]importBinding
+	// UnitNodes maps a unit ID to every declaration node that spells it.
+	//
+	// A unit is an identity, not a declaration: declaration merging and overload
+	// sets give one identity several nodes. Which of them a rule then cares
+	// about is the rule's own business — this records only that they belong to
+	// one identity. Left nil when a caller has no use for the association, which
+	// keeps the graph's own scan allocating nothing extra.
+	UnitNodes map[string][]*shimast.Node
+}
+
+func (inventory *artifactInventory) recordUnitNode(id string, node *shimast.Node) {
+	if inventory == nil || inventory.UnitNodes == nil || node == nil {
+		return
+	}
+	inventory.UnitNodes[id] = append(inventory.UnitNodes[id], node)
 }
 
 type inventoryProblem struct {

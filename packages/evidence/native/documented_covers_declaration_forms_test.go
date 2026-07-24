@@ -92,7 +92,7 @@ export class Service {
   public run(): void {}
 }
 `, "")
-	assertReported(t, messages, "Missing JSDoc on exported function 'run'")
+	assertReported(t, messages, "Missing JSDoc on exported function 'Service.prototype.run'")
 }
 
 /**
@@ -157,8 +157,8 @@ export namespace Orders {
   export const version = "1";
 }
 `, "")
-	assertReportedAmong(t, messages, "Missing JSDoc on exported type 'IInput'")
-	assertReportedAmong(t, messages, "Missing JSDoc on exported property 'version'")
+	assertReportedAmong(t, messages, "Missing JSDoc on exported type 'Orders.IInput'")
+	assertReportedAmong(t, messages, "Missing JSDoc on exported property 'Orders.version'")
 }
 
 /**
@@ -178,7 +178,7 @@ export type Sale = {
   price: number;
 };
 `, "")
-	assertReported(t, messages, "Missing JSDoc on exported property 'price'")
+	assertReported(t, messages, "Missing JSDoc on exported property 'Sale.price'")
 }
 
 /**

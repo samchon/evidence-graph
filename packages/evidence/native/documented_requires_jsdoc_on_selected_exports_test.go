@@ -238,7 +238,7 @@ export interface ISale {
   price: number;
 }
 `, "")
-	assertReported(t, messages, "Missing JSDoc on exported property 'price'")
+	assertReported(t, messages, "Missing JSDoc on exported property 'ISale.price'")
 }
 
 /**

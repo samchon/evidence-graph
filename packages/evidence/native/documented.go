@@ -49,16 +49,20 @@ func (documentedRule) Check(ctx *rule.Context, node *shimast.Node) {
 		return
 	}
 	for _, host := range documentedHosts(ctx.File) {
-		if !host.Symbols.intersects(selected) {
+		if !selected.contains(host.Symbol) {
 			continue
 		}
-		state, block := host.jsdocState(ctx.File)
-		switch state {
+		switch host.jsdocState(ctx.File) {
 		case jsdocPresent:
 			continue
 		case jsdocEmpty:
+			// Anchored on the declaration rather than on the block, like every
+			// other finding here. `Report` skips a node's leading trivia, and a
+			// JSDoc node is entirely trivia to the declaration it precedes, so
+			// anchoring there asks the host to underline a range it is built to
+			// skip past.
 			ctx.Report(
-				block,
+				host.Node,
 				"Empty JSDoc on "+host.describe()+
 					". The block states nothing and carries no tag, so it documents nothing and cites nothing. Describe what this declaration is for, or cite its evidence with '@evidence <target> <reason>'.",
 			)
@@ -108,124 +112,113 @@ func rejectUnknownDocumentedFields(raw json.RawMessage) []string {
 	return rejectUnknownFields(object, []string{"symbol"}, "configuration")
 }
 
-// documentedHost is one public declaration that must carry a JSDoc block.
+// documentedHost is one public identity that must carry a JSDoc block.
 //
-// Nodes is plural because an overload set is one declaration to a reader and
-// several nodes to the parser. Documenting any one of its signatures documents
-// the callable, so the whole run is judged together.
+// The unit judged is an identity, never a declaration node. Declaration merging
+// and overload sets give one identity several nodes — `interface I` beside
+// `namespace I`, a callable beside its signatures — and a block on any of them
+// documents the identity. Judging the nodes instead would demand a second block
+// on the namespace half of the very idiom `evidence/singular` blesses.
 type documentedHost struct {
 	Node    *shimast.Node
 	Nodes   []*shimast.Node
-	Symbols symbolSet
-	Names   []string
+	Symbol  string
+	Targets []string
 }
 
 // jsdocState answers for the whole host, accepting a block on any of its nodes.
-func (host documentedHost) jsdocState(
-	file *shimast.SourceFile,
-) (jsdocPresence, *shimast.Node) {
+func (host documentedHost) jsdocState(file *shimast.SourceFile) jsdocPresence {
 	state := jsdocMissing
-	var empty *shimast.Node
 	for _, node := range host.Nodes {
-		presence, block := jsdocState(file, node)
-		if presence == jsdocPresent {
-			return jsdocPresent, block
-		}
-		if presence == jsdocEmpty && empty == nil {
+		switch jsdocState(file, node) {
+		case jsdocPresent:
+			return jsdocPresent
+		case jsdocEmpty:
 			state = jsdocEmpty
-			empty = block
 		}
 	}
-	return state, empty
+	return state
 }
 
 func (host documentedHost) describe() string {
-	kind := host.Symbols.names()
-	if len(host.Names) == 0 {
-		return "exported " + kind
-	}
-	return "exported " + kind + " '" + strings.Join(host.Names, "', '") + "'"
+	return "exported " + host.Symbol + " '" +
+		strings.Join(host.Targets, "', '") + "'"
 }
 
-// documentedHosts lists the public declarations of a file in source order.
+// documentedHosts lists the public identities of a file in source order.
 //
-// Classification is delegated to the same collector `evidence/graph` uses, so
-// the population that must be able to hold a tag cannot drift from the
-// population a claim can select as a host. Reimplementing the walk here would
-// let the two disagree, and the rule would then guarantee the wrong set.
+// Both the population and its qualified names come from the collector
+// `evidence/graph` uses. The population that must be able to hold a tag is by
+// definition the population a claim can select as a host, and the name a
+// diagnostic asks the author to cite has to be the name the graph resolves — a
+// second walk here would let either drift, and the rule would then guarantee
+// the wrong set under the wrong names.
 func documentedHosts(file *shimast.SourceFile) []documentedHost {
-	supported := map[*shimast.Node]symbolSet{}
+	inventory := &artifactInventory{
+		Type:      artifactTypeScript,
+		UnitNodes: map[string][]*shimast.Node{},
+	}
 	collectTypeScriptStatements(
 		file.Statements,
 		nil,
 		"",
-		&artifactInventory{Type: artifactTypeScript},
-		supported,
+		inventory,
+		map[*shimast.Node]symbolSet{},
 		map[string]*evidenceUnit{},
 		file.IsDeclarationFile,
 		false,
 		false,
 	)
-	hosts := make([]documentedHost, 0, len(supported))
-	for node, symbols := range supported {
-		if node == nil || len(symbols) == 0 {
-			continue
-		}
-		// A variable's leading JSDoc attaches to the statement wrapper, which is
-		// registered as a host beside each of its declarations. Reporting the
-		// declarations too would demand a block in a position TypeScript never
-		// reads one from.
-		if node.Kind == shimast.KindVariableDeclaration {
+	hosts := make([]documentedHost, 0, len(inventory.Units))
+	for _, unit := range inventory.Units {
+		nodes := inventory.UnitNodes[unit.ID]
+		if len(nodes) == 0 {
 			continue
 		}
 		hosts = append(hosts, documentedHost{
-			Node:    node,
-			Nodes:   []*shimast.Node{node},
-			Symbols: symbols,
-			Names:   hostDeclaredNames(node),
+			Node:    nodes[0],
+			Nodes:   nodes,
+			Symbol:  unit.Symbol,
+			Targets: []string{unit.Target},
 		})
 	}
 	sort.Slice(hosts, func(left int, right int) bool {
 		return hosts[left].Node.Pos() < hosts[right].Node.Pos()
 	})
-	return mergeOverloadHosts(hosts)
+	return mergeSharedBlockHosts(hosts)
 }
 
-// mergeOverloadHosts folds an overload set into the single host it reads as.
+// mergeSharedBlockHosts folds identities that can only ever share one block.
 //
-// TypeScript requires a callable's overload signatures to be adjacent to their
-// implementation, so a run of neighbouring function declarations sharing a name
-// is exactly one overload set. Judging the signatures separately would report
-// every properly documented overload set in existence, since the convention is
-// one block above the first signature.
-func mergeOverloadHosts(hosts []documentedHost) []documentedHost {
+// `export const a = 1, b = 2;` declares two identities, and TypeScript gives
+// the statement a single JSDoc position serving both. They are two obligations
+// with one repair, so reporting each separately tells the author the same thing
+// twice — the duplication this project's diagnostics deliberately avoid.
+func mergeSharedBlockHosts(hosts []documentedHost) []documentedHost {
 	merged := make([]documentedHost, 0, len(hosts))
+	byStatement := map[*shimast.Node]int{}
 	for _, host := range hosts {
-		previous := len(merged) - 1
-		if previous >= 0 &&
-			host.Node.Kind == shimast.KindFunctionDeclaration &&
-			merged[previous].Node.Kind == shimast.KindFunctionDeclaration &&
-			len(host.Names) == 1 &&
-			len(merged[previous].Names) == 1 &&
-			host.Names[0] == merged[previous].Names[0] {
-			merged[previous].Nodes = append(merged[previous].Nodes, host.Node)
+		statement := sharedVariableStatement(host)
+		if statement == nil {
+			merged = append(merged, host)
 			continue
 		}
+		if index, seen := byStatement[statement]; seen &&
+			merged[index].Symbol == host.Symbol {
+			merged[index].Targets = append(merged[index].Targets, host.Targets...)
+			continue
+		}
+		byStatement[statement] = len(merged)
 		merged = append(merged, host)
 	}
 	return merged
 }
 
-func hostDeclaredNames(node *shimast.Node) []string {
-	if node.Kind == shimast.KindVariableStatement {
-		names := []string{}
-		for _, declared := range topLevelDeclaredNames(node) {
-			names = append(names, declared.Name)
+func sharedVariableStatement(host documentedHost) *shimast.Node {
+	for _, node := range host.Nodes {
+		if node != nil && node.Kind == shimast.KindVariableStatement {
+			return node
 		}
-		return names
-	}
-	if name := declarationName(node.Name()); name != "" {
-		return []string{name}
 	}
 	return nil
 }
@@ -244,24 +237,19 @@ const (
 // rule accepts exactly what a citation could be found in. Accepting anything
 // wider would pass a comment the graph cannot read, which is the silence this
 // rule exists to remove.
-func jsdocState(
-	file *shimast.SourceFile,
-	node *shimast.Node,
-) (jsdocPresence, *shimast.Node) {
+func jsdocState(file *shimast.SourceFile, node *shimast.Node) jsdocPresence {
 	content := file.Text()
 	state := jsdocMissing
-	var empty *shimast.Node
 	for _, doc := range node.JSDoc(file) {
 		if doc == nil || doc.Pos() < 0 || doc.End() > len(content) {
 			continue
 		}
 		if jsdocHasContent(content[doc.Pos():doc.End()]) {
-			return jsdocPresent, doc
+			return jsdocPresent
 		}
 		state = jsdocEmpty
-		empty = doc
 	}
-	return state, empty
+	return state
 }
 
 func jsdocHasContent(comment string) bool {

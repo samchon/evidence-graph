@@ -12,11 +12,11 @@ import {
  *
  * This is the idiom a consumer meets first, and the one `evidence/singular`
  * blesses by name. Each fixture reaches its first declaration through a
- * different fold — a type unit, a class that is no unit at all, an overload
- * run, an export assignment — and the last two document every half, since
- * nothing beyond the first is asked for or objected to. Driving that through
- * the real binary is what proves the agreement between the two rules survives
- * packaging.
+ * different route — a type unit, a namespace materializing a merged class, an
+ * overload run, a variable statement behind a default export — and the last two
+ * document every half, since nothing beyond the first is asked for or objected
+ * to. Driving that through the real binary is what proves the agreement between
+ * the two rules survives packaging.
  *
  * 1. Declare an interface, a class, an overload set, and a default export, each
  *    documented on its first declaration and some on every half.
@@ -55,8 +55,8 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
         "",
       ].join("\n"),
       "src/Something.ts": [
-        "/** The exported service. */",
         "export class Something {}",
+        "/** The exported service. */",
         "export namespace Something {",
         "  /** Current version. */",
         '  export const version = "1";',

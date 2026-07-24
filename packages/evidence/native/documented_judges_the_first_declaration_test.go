@@ -111,50 +111,6 @@ export namespace ISale {
 }
 
 /**
- * Verifies a class founds the identity it merges with a namespace.
- *
- * A class declaration is deliberately not a type unit, so the collector gives
- * the identity only its namespace half. Left that way, the declaration a reader
- * meets first could never be the basis, and a file documenting the class would
- * be told its identity is undocumented with the block sitting directly above.
- *
- *  1. Document only the class half of a merged identity.
- *  2. Run the rule.
- *  3. Assert silence.
- */
-func TestDocumentedAcceptsAMergedClassDocumentedFirst(t *testing.T) {
-	assertSilent(t, runDocumentedRule(t, "src/Something.ts", `
-/** The exported service. */
-export class Something {}
-export namespace Something {
-  /** Current version. */
-  export const version = "1";
-}
-`, ""))
-}
-
-/**
- * Verifies the class fold works in the reporting direction too.
- *
- * Folding the class in must make it the basis, not merely make its block
- * forgivable: with the class bare, a block on the namespace cannot stand in.
- *
- *  1. Leave the class bare and document the namespace half.
- *  2. Run the rule.
- *  3. Assert the identity is reported.
- */
-func TestDocumentedReportsAMergedClassDocumentedOnlyLater(t *testing.T) {
-	assertReported(t, runDocumentedRule(t, "src/Something.ts", `
-export class Something {}
-/** The exported service. */
-export namespace Something {
-  /** Current version. */
-  export const version = "1";
-}
-`, ""), "Missing JSDoc on exported type 'Something'")
-}
-
-/**
  * Verifies a const founds the identity its default export re-exposes.
  *
  * `export default x` declares nothing and materializes no unit, so the const is

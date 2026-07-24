@@ -184,12 +184,13 @@ func documentedHosts(file *shimast.SourceFile) []documentedHost {
 		Type:      artifactTypeScript,
 		UnitNodes: map[string][]*shimast.Node{},
 	}
+	supported := map[*shimast.Node]symbolSet{}
 	collectTypeScriptStatements(
 		file.Statements,
 		nil,
 		"",
 		inventory,
-		map[*shimast.Node]symbolSet{},
+		supported,
 		map[string]*evidenceUnit{},
 		file.IsDeclarationFile,
 		false,
@@ -197,7 +198,7 @@ func documentedHosts(file *shimast.SourceFile) []documentedHost {
 	)
 	hosts := make([]documentedHost, 0, len(inventory.Units))
 	for _, unit := range inventory.Units {
-		nodes := inventory.UnitNodes[unit.ID]
+		nodes := hostNodesOf(inventory.UnitNodes[unit.ID], supported, unit.Symbol)
 		if len(nodes) == 0 {
 			continue
 		}
@@ -211,9 +212,34 @@ func documentedHosts(file *shimast.SourceFile) []documentedHost {
 	sort.Slice(hosts, func(left int, right int) bool {
 		return hosts[left].Node.Pos() < hosts[right].Node.Pos()
 	})
-	return orderIdentityDeclarations(
-		attachMergedDeclarations(file, mergeSharedBlockHosts(hosts)),
-	)
+	return orderIdentityDeclarations(mergeSharedBlockHosts(hosts))
+}
+
+// hostNodesOf keeps the declarations that can actually carry a citation.
+//
+// A name can be spelled by a declaration that hosts nothing: a class is not a
+// type unit, so `class C` beside `namespace C` materializes the `C` type from
+// the namespace alone, and the collector registers no host for the class at
+// all. Demanding the block there would send an author's `@evidence` into a
+// position where `evidence/graph` rejects it as an unsupported host — the rule
+// steering citations somewhere a citation cannot live, which is the failure it
+// exists to prevent.
+//
+// Narrowing to real hosts also keeps this rule's premise exact. The population
+// that must be able to hold a tag is the population a claim can select as a
+// host, and nothing wider.
+func hostNodesOf(
+	nodes []*shimast.Node,
+	supported map[*shimast.Node]symbolSet,
+	symbol string,
+) []*shimast.Node {
+	hosts := make([]*shimast.Node, 0, len(nodes))
+	for _, node := range nodes {
+		if supported[node].contains(symbol) {
+			hosts = append(hosts, node)
+		}
+	}
+	return hosts
 }
 
 // orderIdentityDeclarations puts each identity's declarations in source order.
@@ -231,65 +257,6 @@ func orderIdentityDeclarations(hosts []documentedHost) []documentedHost {
 		})
 		if len(nodes) != 0 {
 			hosts[index].Node = nodes[0]
-		}
-	}
-	return hosts
-}
-
-// attachMergedDeclarations folds declarations that spell an identity without
-// materializing a unit of their own into that identity's host.
-//
-// Two forms reach the same identity without being units. `export default x`
-// declares nothing, and a class or enum declaration is deliberately not a type
-// unit — yet either can be the declaration a reader meets first, and
-// `evidence/singular` already counts those pairs as one identity. The
-// first-declaration test can only see what is in the identity's node set, so
-// without this fold a block written on the class half of `class C` /
-// `namespace C` would read as no documentation at all and the namespace half
-// would be reported instead.
-//
-// Only module-scope declarations are folded, which is where every one of these
-// forms is written. A namespace nested inside another is left to the qualified
-// identity the collector already gives it.
-func attachMergedDeclarations(
-	file *shimast.SourceFile,
-	hosts []documentedHost,
-) []documentedHost {
-	if file.Statements == nil {
-		return hosts
-	}
-	attach := func(name string, node *shimast.Node) {
-		if name == "" {
-			return
-		}
-		for index := range hosts {
-			for _, target := range hosts[index].Targets {
-				if target != name {
-					continue
-				}
-				hosts[index].Nodes = append(hosts[index].Nodes, node)
-				break
-			}
-		}
-	}
-	for _, statement := range file.Statements.Nodes {
-		if statement == nil {
-			continue
-		}
-		switch statement.Kind {
-		case shimast.KindExportAssignment:
-			assignment := statement.AsExportAssignment()
-			if assignment == nil ||
-				assignment.Expression == nil ||
-				assignment.Expression.Kind != shimast.KindIdentifier {
-				continue
-			}
-			attach(declarationName(assignment.Expression), statement)
-		case shimast.KindClassDeclaration, shimast.KindEnumDeclaration:
-			if !isSyntacticallyExported(statement) {
-				continue
-			}
-			attach(declarationName(statement.Name()), statement)
 		}
 	}
 	return hosts

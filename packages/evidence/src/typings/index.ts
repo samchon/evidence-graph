@@ -1,3 +1,4 @@
+import "./ITtscLintContributorRules";
 import "./ITtscLintRuleOptionsMap";
 
 export * from "./EvidenceGraphMarkdownSymbol";

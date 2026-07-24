@@ -7,6 +7,8 @@ import (
 
 const graphRuleName = "evidence/graph"
 
+const singularRuleName = "evidence/singular"
+
 type artifactKind string
 
 const (

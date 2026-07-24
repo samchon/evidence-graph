@@ -62,7 +62,7 @@ The first build can take several minutes; it links the rule into the lint binary
 ```ts
 // lint.config.ts
 import type { ITtscLintConfig } from "@ttsc/lint";
-import evidence, { type IEvidenceGraphConfig } from "@samchon/lint-plugin-evidence";
+import { evidence, type IEvidenceGraphConfig } from "@samchon/lint-plugin-evidence";
 
 const graph: IEvidenceGraphConfig = {
   claims: [
@@ -85,6 +85,7 @@ export default {
   },
   rules: {
     "evidence/graph": ["error", graph],
+    "evidence/singular": "error",
   },
 } satisfies ITtscLintConfig;
 ```

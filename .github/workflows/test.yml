@@ -16,17 +16,7 @@ jobs:
           - macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout lint-plugin-evidence
-        uses: actions/checkout@v4
-        with:
-          path: samchon/lint-plugin-evidence
-
-      - name: Checkout ttsc
-        uses: actions/checkout@v4
-        with:
-          repository: samchon/ttsc
-          ref: v0.20.0
-          path: samchon/ttsc
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -41,9 +31,7 @@ jobs:
           version: 10.6.4
 
       - name: Install Dependencies
-        working-directory: samchon/lint-plugin-evidence
         run: pnpm install --frozen-lockfile
 
       - name: Run Tests
-        working-directory: samchon/lint-plugin-evidence
         run: pnpm test

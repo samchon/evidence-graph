@@ -2,14 +2,15 @@
 //
 // ttsc does NOT use it: at build time ttsc copies the ./native package into
 // @ttsc/lint's own Go module as a sub-package (contrib/evidence) and supplies
-// every dependency from the host module's graph. A contributor therefore ships
-// Go SOURCE, never a module — ttsc rejects a go.mod that sits inside the
-// `source` directory itself, which is why this file lives one level above
-// ./native and is excluded from what ttsc copies.
+// every dependency from a generated go.work that overlays the installed ttsc
+// package and its shim modules. A contributor therefore ships Go SOURCE, never
+// a module — ttsc rejects a go.mod that sits inside the `source` directory
+// itself, which is why this file lives one level above ./native and is
+// excluded from what ttsc copies.
 //
-// The replace directives point at a sibling checkout of samchon/ttsc
-// (../../../../samchon/ttsc relative to this package). Adjust them to your
-// layout, or delete this file — the ttsc build is unaffected either way.
+// The replace directives resolve through ./node_modules, so `pnpm install`
+// is the only prerequisite and the pnpm catalog stays the single source of
+// truth for which ttsc version the Go tests compile against.
 module github.com/samchon/lint-plugin-evidence/packages/evidence
 
 go 1.26
@@ -33,17 +34,19 @@ require (
 )
 
 replace (
-	github.com/microsoft/typescript-go/shim/ast => ../../../../samchon/ttsc/packages/ttsc/shim/ast
-	github.com/microsoft/typescript-go/shim/bundled => ../../../../samchon/ttsc/packages/ttsc/shim/bundled
-	github.com/microsoft/typescript-go/shim/checker => ../../../../samchon/ttsc/packages/ttsc/shim/checker
-	github.com/microsoft/typescript-go/shim/compiler => ../../../../samchon/ttsc/packages/ttsc/shim/compiler
-	github.com/microsoft/typescript-go/shim/core => ../../../../samchon/ttsc/packages/ttsc/shim/core
-	github.com/microsoft/typescript-go/shim/diagnosticwriter => ../../../../samchon/ttsc/packages/ttsc/shim/diagnosticwriter
-	github.com/microsoft/typescript-go/shim/parser => ../../../../samchon/ttsc/packages/ttsc/shim/parser
-	github.com/microsoft/typescript-go/shim/scanner => ../../../../samchon/ttsc/packages/ttsc/shim/scanner
-	github.com/microsoft/typescript-go/shim/tsoptions => ../../../../samchon/ttsc/packages/ttsc/shim/tsoptions
-	github.com/microsoft/typescript-go/shim/tspath => ../../../../samchon/ttsc/packages/ttsc/shim/tspath
-	github.com/microsoft/typescript-go/shim/vfs => ../../../../samchon/ttsc/packages/ttsc/shim/vfs
-	github.com/samchon/ttsc/packages/lint => ../../../../samchon/ttsc/packages/lint
-	github.com/samchon/ttsc/packages/ttsc => ../../../../samchon/ttsc/packages/ttsc
+	github.com/microsoft/typescript-go/shim/ast => ./node_modules/ttsc/shim/ast
+	github.com/microsoft/typescript-go/shim/bundled => ./node_modules/ttsc/shim/bundled
+	github.com/microsoft/typescript-go/shim/checker => ./node_modules/ttsc/shim/checker
+	github.com/microsoft/typescript-go/shim/compiler => ./node_modules/ttsc/shim/compiler
+	github.com/microsoft/typescript-go/shim/core => ./node_modules/ttsc/shim/core
+	github.com/microsoft/typescript-go/shim/diagnosticwriter => ./node_modules/ttsc/shim/diagnosticwriter
+	github.com/microsoft/typescript-go/shim/parser => ./node_modules/ttsc/shim/parser
+	github.com/microsoft/typescript-go/shim/scanner => ./node_modules/ttsc/shim/scanner
+	github.com/microsoft/typescript-go/shim/tsoptions => ./node_modules/ttsc/shim/tsoptions
+	github.com/microsoft/typescript-go/shim/tspath => ./node_modules/ttsc/shim/tspath
+	github.com/microsoft/typescript-go/shim/vfs => ./node_modules/ttsc/shim/vfs
+	github.com/microsoft/typescript-go/shim/vfs/cachedvfs => ./node_modules/ttsc/shim/vfs/cachedvfs
+	github.com/microsoft/typescript-go/shim/vfs/osvfs => ./node_modules/ttsc/shim/vfs/osvfs
+	github.com/samchon/ttsc/packages/lint => ./node_modules/@ttsc/lint
+	github.com/samchon/ttsc/packages/ttsc => ./node_modules/ttsc
 )

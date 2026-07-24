@@ -34,6 +34,73 @@ func (reporter *capturedProjectReporter) SetState(state any) {
 	reporter.state = state
 }
 
+// runTargetsRule drives the corpus rule end to end and returns what it
+// published, together with anything it reported.
+//
+// Both halves are returned because the rule's contract is that the second is
+// always empty: the host offers a corpus only for a project rule that passed,
+// so a case asserting hints without also asserting silence would pass against a
+// rule that had already disqualified itself.
+func runTargetsRule(
+	t *testing.T,
+	files map[string]string,
+	config string,
+) ([]rule.Hint, []string) {
+	t.Helper()
+	root := t.TempDir()
+	paths := make([]string, 0, len(files))
+	for path := range files {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, relative := range paths {
+		absolute := filepath.Join(root, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(absolute, []byte(files[relative]), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	reporter := &capturedProjectReporter{}
+	context := rule.NewProjectContext(
+		rule.ProjectIdentity{PhysicalProjectRoot: root},
+		nil,
+		nil,
+		rule.SeverityError,
+		json.RawMessage(config),
+		reporter,
+	)
+	targetsRule{}.Check(context)
+	hints := targetsRule{}.Hints(&rule.HintContext{
+		Identity: rule.ProjectIdentity{PhysicalProjectRoot: root},
+		State:    reporter.state,
+		Severity: rule.SeverityError,
+		Options:  json.RawMessage(config),
+	})
+	return hints, reporter.messages
+}
+
+// targetHintsAt narrows a corpus to one trigger, preserving published order.
+func targetHintsAt(hints []rule.Hint, after string) []rule.Hint {
+	narrowed := []rule.Hint{}
+	for _, hint := range hints {
+		if hint.Trigger.After == after {
+			narrowed = append(narrowed, hint)
+		}
+	}
+	return narrowed
+}
+
+// targetInserts lists what a corpus would insert, in offered order.
+func targetInserts(hints []rule.Hint) []string {
+	inserts := make([]string, 0, len(hints))
+	for _, hint := range hints {
+		inserts = append(inserts, hint.Insert)
+	}
+	return inserts
+}
+
 func runIndexRule(
 	t *testing.T,
 	files map[string]string,

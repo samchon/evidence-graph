@@ -32,29 +32,6 @@ export namespace ISale {
 }
 
 /**
- * Verifies the same for a class merged with a namespace.
- *
- * A class declaration is not itself a host, so the namespace half carries the
- * only `type` unit of that name — and it must still be discharged by the block
- * a reader would write once.
- *
- *  1. Document a class and its companion namespace once.
- *  2. Run the rule.
- *  3. Assert silence.
- */
-func TestDocumentedAcceptsOneBlockForAMergedClassAndNamespace(t *testing.T) {
-	assertSilent(t, runDocumentedRule(t, "src/Something.ts", `
-/** The exported service. */
-export class Something {}
-/** The exported service. */
-export namespace Something {
-  /** Current version. */
-  export const version = "1";
-}
-`, ""))
-}
-
-/**
  * Verifies the merge did not become "never report a namespace".
  *
  * The negative twin of the two cases above. Folding merged declarations into

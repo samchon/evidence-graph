@@ -52,15 +52,22 @@ func (documentedRule) Check(ctx *rule.Context, node *shimast.Node) {
 		if !selected.contains(host.Symbol) {
 			continue
 		}
-		switch host.jsdocState(ctx.File) {
-		case jsdocPresent:
+		blocks := host.documentation(ctx.File)
+		// Every finding anchors on the declaration rather than on a block.
+		// `Report` skips a node's leading trivia, and a JSDoc node is entirely
+		// trivia to the declaration it precedes, so anchoring there asks the
+		// host to underline the range it is built to skip past.
+		switch {
+		case len(blocks.Content) == 1:
 			continue
-		case jsdocEmpty:
-			// Anchored on the declaration rather than on the block, like every
-			// other finding here. `Report` skips a node's leading trivia, and a
-			// JSDoc node is entirely trivia to the declaration it precedes, so
-			// anchoring there asks the host to underline a range it is built to
-			// skip past.
+		case len(blocks.Content) > 1:
+			ctx.Report(
+				host.Node,
+				"Duplicate JSDoc on "+host.describe()+
+					": blocks at "+describeLines(ctx.File, blocks.Content)+
+					". One identity documents itself in one place — the tag parser reads every block, so a citation split across two of them is provenance a reviewer has to go looking for. Keep one block and fold the rest into it.",
+			)
+		case len(blocks.Empty) != 0:
 			ctx.Report(
 				host.Node,
 				"Empty JSDoc on "+host.describe()+
@@ -126,18 +133,83 @@ type documentedHost struct {
 	Targets []string
 }
 
-// jsdocState answers for the whole host, accepting a block on any of its nodes.
-func (host documentedHost) jsdocState(file *shimast.SourceFile) jsdocPresence {
-	state := jsdocMissing
+// documentationBlocks separates an identity's JSDoc blocks by whether they say
+// anything.
+//
+// Only a block with content documents, and only a block with content can hold
+// a citation, so only those are counted against the one-block rule. An empty
+// block keeps its own finding rather than pushing an identity into duplicate
+// territory for a comment that says nothing.
+type documentationBlocks struct {
+	Content []*shimast.Node
+	Empty   []*shimast.Node
+}
+
+// documentation gathers every block that documents this identity.
+//
+// Gathering across all of the identity's nodes is what makes the count mean
+// something: `interface I` beside `namespace I` is one identity with two places
+// a block could sit, and the rule is that exactly one of them holds it.
+func (host documentedHost) documentation(
+	file *shimast.SourceFile,
+) documentationBlocks {
+	blocks := documentationBlocks{}
+	content := file.Text()
+	seen := map[int]bool{}
 	for _, node := range host.Nodes {
-		switch jsdocState(file, node) {
-		case jsdocPresent:
-			return jsdocPresent
-		case jsdocEmpty:
-			state = jsdocEmpty
+		if node == nil {
+			continue
+		}
+		for _, doc := range node.JSDoc(file) {
+			if doc == nil || doc.Pos() < 0 || doc.End() > len(content) {
+				continue
+			}
+			// One block can be reported by several nodes of the same identity,
+			// and counting it twice would invent a duplicate out of one comment.
+			if seen[doc.Pos()] {
+				continue
+			}
+			seen[doc.Pos()] = true
+			if jsdocHasContent(content[doc.Pos():doc.End()]) {
+				blocks.Content = append(blocks.Content, doc)
+				continue
+			}
+			blocks.Empty = append(blocks.Empty, doc)
 		}
 	}
-	return state
+	return blocks
+}
+
+// blockStart points at a block's opening slash rather than at its node start.
+//
+// A node's position begins where the previous token ended, so it sits in the
+// whitespace above the comment and names the blank line before it. Reporting a
+// line the reader has to correct by one is worse than reporting none.
+func blockStart(content string, node *shimast.Node) int {
+	offset := node.Pos()
+	if offset < 0 {
+		return 0
+	}
+	for offset < len(content) && strings.ContainsRune(" \t\r\n", rune(content[offset])) {
+		offset++
+	}
+	return offset
+}
+
+func describeLines(file *shimast.SourceFile, nodes []*shimast.Node) string {
+	content := file.Text()
+	ordered := append([]*shimast.Node(nil), nodes...)
+	sort.Slice(ordered, func(left int, right int) bool {
+		return ordered[left].Pos() < ordered[right].Pos()
+	})
+	lines := make([]string, 0, len(ordered))
+	for _, node := range ordered {
+		lines = append(lines, "line "+decimal(lineAt(content, blockStart(content, node))))
+	}
+	if len(lines) < 2 {
+		return strings.Join(lines, "")
+	}
+	return strings.Join(lines[:len(lines)-1], ", ") + " and " + lines[len(lines)-1]
 }
 
 func (host documentedHost) describe() string {
@@ -185,7 +257,65 @@ func documentedHosts(file *shimast.SourceFile) []documentedHost {
 	sort.Slice(hosts, func(left int, right int) bool {
 		return hosts[left].Node.Pos() < hosts[right].Node.Pos()
 	})
-	return mergeSharedBlockHosts(hosts)
+	return attachMergedDeclarations(file, mergeSharedBlockHosts(hosts))
+}
+
+// attachMergedDeclarations folds declarations that spell an identity without
+// materializing a unit of their own into that identity's host.
+//
+// Two forms reach the same identity without being units. `export default x`
+// declares nothing, and a class or enum declaration is deliberately not a type
+// unit — yet each is a second place a block can sit above one name, and
+// `evidence/singular` already counts those pairs as one identity. Without this
+// the duplicate rule would be blind to the merged forms authors reach for most,
+// and a block written on the class half of `class C` / `namespace C` would read
+// as no documentation at all.
+//
+// Only module-scope declarations are folded, which is where every one of these
+// forms is written. A namespace nested inside another is left to the qualified
+// identity the collector already gives it.
+func attachMergedDeclarations(
+	file *shimast.SourceFile,
+	hosts []documentedHost,
+) []documentedHost {
+	if file.Statements == nil {
+		return hosts
+	}
+	attach := func(name string, node *shimast.Node) {
+		if name == "" {
+			return
+		}
+		for index := range hosts {
+			for _, target := range hosts[index].Targets {
+				if target != name {
+					continue
+				}
+				hosts[index].Nodes = append(hosts[index].Nodes, node)
+				break
+			}
+		}
+	}
+	for _, statement := range file.Statements.Nodes {
+		if statement == nil {
+			continue
+		}
+		switch statement.Kind {
+		case shimast.KindExportAssignment:
+			assignment := statement.AsExportAssignment()
+			if assignment == nil ||
+				assignment.Expression == nil ||
+				assignment.Expression.Kind != shimast.KindIdentifier {
+				continue
+			}
+			attach(declarationName(assignment.Expression), statement)
+		case shimast.KindClassDeclaration, shimast.KindEnumDeclaration:
+			if !isSyntacticallyExported(statement) {
+				continue
+			}
+			attach(declarationName(statement.Name()), statement)
+		}
+	}
+	return hosts
 }
 
 // mergeSharedBlockHosts folds identities that can only ever share one block.
@@ -223,35 +353,12 @@ func sharedVariableStatement(host documentedHost) *shimast.Node {
 	return nil
 }
 
-type jsdocPresence int
-
-const (
-	jsdocMissing jsdocPresence = iota
-	jsdocEmpty
-	jsdocPresent
-)
-
-// jsdocState reports whether a declaration carries a JSDoc block with content.
+// jsdocHasContent reports whether a block says anything at all.
 //
-// Presence is read through the same accessor the tag collector uses, so the
-// rule accepts exactly what a citation could be found in. Accepting anything
-// wider would pass a comment the graph cannot read, which is the silence this
-// rule exists to remove.
-func jsdocState(file *shimast.SourceFile, node *shimast.Node) jsdocPresence {
-	content := file.Text()
-	state := jsdocMissing
-	for _, doc := range node.JSDoc(file) {
-		if doc == nil || doc.Pos() < 0 || doc.End() > len(content) {
-			continue
-		}
-		if jsdocHasContent(content[doc.Pos():doc.End()]) {
-			return jsdocPresent
-		}
-		state = jsdocEmpty
-	}
-	return state
-}
-
+// Blocks are read through the same accessor the tag collector uses, so the rule
+// accepts exactly what a citation could be found in. Accepting anything wider
+// would pass a comment the graph cannot read, which is the silence this rule
+// exists to remove.
 func jsdocHasContent(comment string) bool {
 	comment = strings.TrimSpace(comment)
 	comment = strings.TrimPrefix(comment, "/**")

@@ -7,17 +7,17 @@ import {
 } from "../internal/project.ts";
 
 /**
- * Verifies the packaged rule accepts one block per merged identity.
+ * Verifies the packaged rule accepts exactly one block per merged identity.
  *
  * This is the idiom a consumer meets first, and the one `evidence/singular`
- * blesses by name. A rule judging declaration nodes instead of identities
- * demands a second block on the namespace half, which no author writes — so the
- * two rules would contradict each other on the very shape they were built
- * around. Driving it through the real binary is what proves the agreement
- * survives packaging.
+ * blesses by name. Each fixture carries its block on a different half on
+ * purpose: the rule counts blocks per identity, never per declaration kind, so
+ * which half holds it is the author's choice. Driving that through the real
+ * binary is what proves the agreement between the two rules survives
+ * packaging.
  *
- * 1. Declare an interface, a class, and a callable, each merged with a same-named
- *    namespace and documented once.
+ * 1. Declare an interface, a class, and an overload set, each merged with a
+ *    same-named namespace or signature run and documented on exactly one half.
  * 2. Enable `evidence/documented` with the default selection.
  * 3. Assert a clean exit.
  */
@@ -43,7 +43,6 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
         "  /** Identifier of the sale. */",
         "  id: string;",
         "}",
-        "/** Companion contracts of a sale. */",
         "export namespace ISale {",
         "  /** Creation input. */",
         "  export interface ICreate {",
@@ -54,9 +53,8 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
         "",
       ].join("\n"),
       "src/Something.ts": [
-        "/** The exported service. */",
         "export class Something {}",
-        "/** Companion values of the service. */",
+        "/** The exported service. */",
         "export namespace Something {",
         "  /** Current version. */",
         '  export const version = "1";',
@@ -70,6 +68,12 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
         "export function format(value: string | number): string {",
         "  return String(value);",
         "}",
+        "",
+      ].join("\n"),
+      "src/evidence.ts": [
+        "/** The exported descriptor. */",
+        'export const evidence = { name: "evidence" };',
+        "export default evidence;",
         "",
       ].join("\n"),
     },

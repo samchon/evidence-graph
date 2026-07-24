@@ -6,7 +6,7 @@
 
 The evidence graph for the AI coding era: the guardrail for goal mode.
 
-Your spec is now a compile error.
+> Your spec is now a compile error.
 
 When Claude Code or Codex works unattended, it can skip a requirement and still report "done." Evidence Graph makes every configured requirement demand an explicit acknowledgement from the code, test, or document that claims to satisfy it.
 
@@ -313,3 +313,7 @@ Your [donation](https://github.com/sponsors/samchon) encourages `@samchon/eviden
 
 - [`ttsc`](https://github.com/samchon/ttsc): the `typescript-go` toolchain this plugin runs on.
 - [`@ttsc/lint`](https://github.com/samchon/ttsc/tree/master/packages/lint): the lint engine that links this rule into the compiler.
+
+Evidence Graph is being developed as an independent package while its rule model and adoption path mature. Once complete and stable, it may move into the `ttsc` repository as the official `@ttsc/lint-plugin-evidence` package.
+
+The longer-term plan also reaches beyond TypeScript: a standalone, language-agnostic evidence checker that can enforce the same graph across documents and code in any programming language, without depending on a single compiler or lint engine.

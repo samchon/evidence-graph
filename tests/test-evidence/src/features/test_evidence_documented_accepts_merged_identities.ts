@@ -10,15 +10,15 @@ import {
  * Verifies the packaged rule accepts exactly one block per merged identity.
  *
  * This is the idiom a consumer meets first, and the one `evidence/singular`
- * blesses by name. Every fixture carries its single block on the identity's
- * first declaration, which is the only accepted position — and each reaches
- * that position through a different fold: a type unit, a class that is no unit
- * at all, an overload run, and an export assignment. Driving that through the
- * real binary is what proves the agreement between the two rules survives
+ * blesses by name. Each fixture reaches its first declaration through a
+ * different fold — a type unit, a class that is no unit at all, an overload
+ * run, an export assignment — and the last two document every half, since
+ * nothing beyond the first is asked for or objected to. Driving that through
+ * the real binary is what proves the agreement between the two rules survives
  * packaging.
  *
  * 1. Declare an interface, a class, an overload set, and a default export, each
- *    documented once on its first declaration.
+ *    documented on its first declaration and some on every half.
  * 2. Enable `evidence/documented` with the default selection.
  * 3. Assert a clean exit.
  */
@@ -63,9 +63,11 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
         "",
       ].join("\n"),
       "src/format.ts": [
-        "/** Renders a value for display. */",
+        "/** Renders a string for display. */",
         "export function format(value: string): string;",
+        "/** Renders a number for display. */",
         "export function format(value: number): string;",
+        "/** Renders either for display. */",
         "export function format(value: string | number): string {",
         "  return String(value);",
         "}",
@@ -74,6 +76,7 @@ export const test_evidence_documented_accepts_merged_identities = (): void => {
       "src/evidence.ts": [
         "/** The exported descriptor. */",
         'export const evidence = { name: "evidence" };',
+        "/** The default export of this module. */",
         "export default evidence;",
         "",
       ].join("\n"),

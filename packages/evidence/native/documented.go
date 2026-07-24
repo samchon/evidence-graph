@@ -58,25 +58,8 @@ func (documentedRule) Check(ctx *rule.Context, node *shimast.Node) {
 		// trivia to the declaration it precedes, so anchoring there asks the
 		// host to underline the range it is built to skip past.
 		switch {
-		case len(blocks.Content) == 1:
-			if blocks.Content[0].Owner == host.Node {
-				continue
-			}
-			ctx.Report(
-				host.Node,
-				"Misplaced JSDoc on "+host.describe()+
-					": the block is at "+describeLines(ctx.File, []*shimast.Node{blocks.Content[0].Block})+
-					", but this identity is first declared at line "+
-					decimal(identityDeclarationLine(ctx.File, host.Node))+
-					". A reader looking for what an identity is should not have to guess which half of a merge carries it. Move the block above the first declaration.",
-			)
-		case len(blocks.Content) > 1:
-			ctx.Report(
-				host.Node,
-				"Duplicate JSDoc on "+host.describe()+
-					": blocks at "+describeLines(ctx.File, blockNodes(blocks.Content))+
-					". One identity documents itself in one place — the tag parser reads every block, so a citation split across two of them is provenance a reviewer has to go looking for. Keep one block and fold the rest into it.",
-			)
+		case len(blocks.Content) != 0:
+			continue
 		case len(blocks.Empty) != 0:
 			ctx.Report(
 				host.Node,
@@ -143,120 +126,42 @@ type documentedHost struct {
 	Targets []string
 }
 
-// documentationBlocks separates an identity's JSDoc blocks by whether they say
-// anything.
+// documentationBlocks separates the blocks on one declaration by whether they
+// say anything.
 //
-// Only a block with content documents, and only a block with content can hold
-// a citation, so only those are counted against the one-block rule. An empty
-// block keeps its own finding rather than pushing an identity into duplicate
-// territory for a comment that says nothing.
+// Only a block with content documents, and only a block with content can hold a
+// citation. An empty block keeps its own finding, because telling an author a
+// block is missing while they are looking straight at one helps nobody.
 type documentationBlocks struct {
-	Content []documentationBlock
-	Empty   []documentationBlock
+	Content []*shimast.Node
+	Empty   []*shimast.Node
 }
 
-// documentationBlock pairs a block with the declaration it sits above.
+// documentation reads the blocks on the declaration that founds this identity.
 //
-// The owner is what decides placement: a merged identity is documented at its
-// first declaration, so knowing a block exists is not enough — the rule has to
-// know which half of the merge it was written on.
-type documentationBlock struct {
-	Block *shimast.Node
-	Owner *shimast.Node
-}
-
-// documentation gathers every block that documents this identity.
-//
-// Gathering across all of the identity's nodes is what makes the count mean
-// something: `interface I` beside `namespace I` is one identity with two places
-// a block could sit, and the rule is that exactly one of them holds it.
+// Only the first declaration is read. A merged identity is whatever its first
+// declaration says it is, so a block on a later half neither satisfies the
+// first nor counts against it — one unconditional rule, with nothing further to
+// police.
 func (host documentedHost) documentation(
 	file *shimast.SourceFile,
 ) documentationBlocks {
 	blocks := documentationBlocks{}
+	if host.Node == nil {
+		return blocks
+	}
 	content := file.Text()
-	seen := map[int]bool{}
-	for _, node := range host.Nodes {
-		if node == nil {
+	for _, doc := range host.Node.JSDoc(file) {
+		if doc == nil || doc.Pos() < 0 || doc.End() > len(content) {
 			continue
 		}
-		for _, doc := range node.JSDoc(file) {
-			if doc == nil || doc.Pos() < 0 || doc.End() > len(content) {
-				continue
-			}
-			// One block can be reported by several nodes of the same identity,
-			// and counting it twice would invent a duplicate out of one comment.
-			if seen[doc.Pos()] {
-				continue
-			}
-			seen[doc.Pos()] = true
-			if jsdocHasContent(content[doc.Pos():doc.End()]) {
-				blocks.Content = append(
-					blocks.Content,
-					documentationBlock{Block: doc, Owner: node},
-				)
-				continue
-			}
-			blocks.Empty = append(
-				blocks.Empty,
-				documentationBlock{Block: doc, Owner: node},
-			)
+		if jsdocHasContent(content[doc.Pos():doc.End()]) {
+			blocks.Content = append(blocks.Content, doc)
+			continue
 		}
+		blocks.Empty = append(blocks.Empty, doc)
 	}
 	return blocks
-}
-
-// blockStart points at a block's opening slash rather than at its node start.
-//
-// A node's position begins where the previous token ended, so it sits in the
-// whitespace above the comment and names the blank line before it. Reporting a
-// line the reader has to correct by one is worse than reporting none.
-func blockStart(content string, node *shimast.Node) int {
-	offset := node.Pos()
-	if offset < 0 {
-		return 0
-	}
-	for offset < len(content) && strings.ContainsRune(" \t\r\n", rune(content[offset])) {
-		offset++
-	}
-	return offset
-}
-
-func blockNodes(blocks []documentationBlock) []*shimast.Node {
-	nodes := make([]*shimast.Node, 0, len(blocks))
-	for _, block := range blocks {
-		nodes = append(nodes, block.Block)
-	}
-	return nodes
-}
-
-// identityDeclarationLine names the line a declaration is written on.
-//
-// The name's end is preferred over the node's start because a node begins where
-// the previous token ended, which for a documented declaration is inside the
-// JSDoc block above it.
-func identityDeclarationLine(file *shimast.SourceFile, node *shimast.Node) int {
-	content := file.Text()
-	if name := node.Name(); name != nil && name.End() > 0 {
-		return lineAt(content, name.End()-1)
-	}
-	return lineAt(content, blockStart(content, node))
-}
-
-func describeLines(file *shimast.SourceFile, nodes []*shimast.Node) string {
-	content := file.Text()
-	ordered := append([]*shimast.Node(nil), nodes...)
-	sort.Slice(ordered, func(left int, right int) bool {
-		return ordered[left].Pos() < ordered[right].Pos()
-	})
-	lines := make([]string, 0, len(ordered))
-	for _, node := range ordered {
-		lines = append(lines, "line "+decimal(lineAt(content, blockStart(content, node))))
-	}
-	if len(lines) < 2 {
-		return strings.Join(lines, "")
-	}
-	return strings.Join(lines[:len(lines)-1], ", ") + " and " + lines[len(lines)-1]
 }
 
 func (host documentedHost) describe() string {

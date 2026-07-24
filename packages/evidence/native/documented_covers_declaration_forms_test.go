@@ -6,29 +6,6 @@ import (
 )
 
 /**
- * Verifies one block documents a whole overload set.
- *
- * Overload signatures are separate declarations to the parser and one callable
- * to a reader, and the convention is a single block above the first signature.
- * Judging the signatures separately would report every correctly documented
- * overload set in existence.
- *
- *  1. Document only the first of two signatures plus an implementation.
- *  2. Run the rule.
- *  3. Assert silence.
- */
-func TestDocumentedAcceptsOneBlockForAnOverloadSet(t *testing.T) {
-	assertSilent(t, runDocumentedRule(t, "src/format.ts", `
-/** Renders a value for display. */
-export function format(value: string): string;
-export function format(value: number): string;
-export function format(value: string | number): string {
-  return String(value);
-}
-`, ""))
-}
-
-/**
  * Verifies the overload branch still fires when no signature is documented.
  *
  * Merging the run must not become skipping it, which would exempt every

@@ -3,35 +3,6 @@ package evidence
 import "testing"
 
 /**
- * Verifies a merged interface and namespace need one block between them.
- *
- * This is the idiom the whole rule set is built around, and `evidence/singular`
- * blesses it explicitly. A rule that judged declaration nodes rather than
- * identities would demand a second block on the namespace half, which no author
- * writes and no reviewer would accept.
- *
- *  1. Document an interface and its companion namespace once, on the interface.
- *  2. Run the rule with the default selection.
- *  3. Assert silence.
- */
-func TestDocumentedAcceptsOneBlockForAMergedInterfaceAndNamespace(t *testing.T) {
-	assertSilent(t, runDocumentedRule(t, "src/ISale.ts", `
-/** A sale offered to a customer. */
-export interface ISale {
-  /** Identifier of the sale. */
-  id: string;
-}
-export namespace ISale {
-  /** Creation input. */
-  export interface ICreate {
-    /** Identifier of the sale. */
-    id: string;
-  }
-}
-`, ""))
-}
-
-/**
  * Verifies the merge did not become "never report a namespace".
  *
  * The negative twin of the two cases above. Folding merged declarations into
@@ -49,29 +20,6 @@ export namespace Orders {
   export const version = "1";
 }
 `, ""), "Missing JSDoc on exported type 'Orders'")
-}
-
-/**
- * Verifies an undocumented merged identity is reported once, not per half.
- *
- * The other direction of the same grouping: two declarations of one name are
- * one obligation, so they owe one finding.
- *
- *  1. Leave both halves of a merged identity undocumented.
- *  2. Run the rule.
- *  3. Assert a single finding.
- */
-func TestDocumentedReportsAMergedIdentityOnce(t *testing.T) {
-	assertReported(t, runDocumentedRule(t, "src/ISale.ts", `
-export interface ISale {
-  /** Identifier of the sale. */
-  id: string;
-}
-export namespace ISale {
-  /** Current version. */
-  export const version = "1";
-}
-`, ""), "Missing JSDoc on exported type 'ISale'")
 }
 
 /**

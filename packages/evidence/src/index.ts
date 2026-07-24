@@ -23,6 +23,9 @@ export * from "./typings/index";
  *   an {@link IEvidenceGraphConfig}.
  * - `"evidence/singular"` — one public identity per TypeScript file, named after
  *   the file. Takes no options, so it carries a bare severity.
+ * - `"evidence/documented"` — a JSDoc block on every selected export, which is
+ *   the only place an `@evidence` tag is ever read from. Takes an
+ *   {@link IEvidenceDocumentedConfig}.
  *
  * @example <caption>Configure the plugin in `lint.config.ts`</caption>
  *   import type { ITtscLintConfig } from "@ttsc/lint";
@@ -61,7 +64,7 @@ export const evidence = {
     namespace: "evidence",
     version,
   } as const,
-  rules: ["graph", "singular"] as const,
+  rules: ["graph", "singular", "documented"] as const,
   source: path.resolve(__dirname, "..", "native"),
 } satisfies ITtscLintPlugin;
 export default evidence;

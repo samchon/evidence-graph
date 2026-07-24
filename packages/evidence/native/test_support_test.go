@@ -157,11 +157,47 @@ func runSingularRule(t *testing.T, path string, content string) []string {
 	return reporter.messages
 }
 
+func runDocumentedRule(
+	t *testing.T,
+	path string,
+	content string,
+	options string,
+) []string {
+	t.Helper()
+	file := parseTestSourceFile(t, path, content)
+	reporter := &capturedFileReporter{}
+	documentedRule{}.Check(
+		rule.NewContext(
+			file,
+			nil,
+			rule.SeverityError,
+			json.RawMessage(options),
+			reporter,
+		),
+		file.AsNode(),
+	)
+	return reporter.messages
+}
+
 func assertSilent(t *testing.T, messages []string) {
 	t.Helper()
 	if len(messages) != 0 {
 		t.Fatalf("expected no diagnostics, got:\n%s", strings.Join(messages, "\n"))
 	}
+}
+
+func assertReportedAmong(t *testing.T, messages []string, expected string) {
+	t.Helper()
+	for _, message := range messages {
+		if strings.Contains(message, expected) {
+			return
+		}
+	}
+	t.Fatalf(
+		"expected one diagnostic containing %q, got:\n%s",
+		expected,
+		strings.Join(messages, "\n"),
+	)
 }
 
 func assertReported(t *testing.T, messages []string, expected string) {

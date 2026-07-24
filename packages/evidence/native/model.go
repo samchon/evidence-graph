@@ -9,6 +9,8 @@ const graphRuleName = "evidence/graph"
 
 const singularRuleName = "evidence/singular"
 
+const documentedRuleName = "evidence/documented"
+
 type artifactKind string
 
 const (

@@ -1,3 +1,4 @@
+import type { IEvidenceDocumentedConfig } from "../structures/IEvidenceDocumentedConfig";
 import type { IEvidenceGraphConfig } from "../structures/IEvidenceGraphConfig";
 
 declare module "@ttsc/lint" {
@@ -9,5 +10,13 @@ declare module "@ttsc/lint" {
      * evidence references each one must acknowledge.
      */
     "evidence/graph": IEvidenceGraphConfig;
+
+    /**
+     * Requires a JSDoc block on every selected export.
+     *
+     * A JSDoc block is the only place an `@evidence` tag is read from, so an
+     * export without one cannot participate in the graph at all.
+     */
+    "evidence/documented": IEvidenceDocumentedConfig;
   }
 }

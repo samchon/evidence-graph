@@ -16,19 +16,18 @@ export * from "./typings/index";
  * {@link IEvidenceGraphConfig} that describes which documents and TypeScript
  * symbols must remain connected.
  *
- * The plugin contributes four rules, enabled independently.
+ * The plugin contributes three rules, enabled independently.
  *
  * - `"evidence/graph"` — the configured evidence graph. Every declaration target
  *   must resolve, and every selected evidence unit must be acknowledged. Takes
- *   an {@link IEvidenceGraphConfig}.
+ *   an {@link IEvidenceGraphConfig}. It also offers the configured targets as
+ *   editor completions, on the cycles where it passes: the host publishes a
+ *   rule's completions only while that rule reports nothing.
  * - `"evidence/singular"` — one public identity per TypeScript file, named after
  *   the file. Takes no options, so it carries a bare severity.
  * - `"evidence/documented"` — a JSDoc block on every selected export, which is
  *   the only place an `@evidence` tag is ever read from. Takes an
  *   {@link IEvidenceDocumentedConfig}.
- * - `"evidence/targets"` — editor completions for the configured Markdown and
- *   Swagger targets. Reports nothing; it exists so an author can pick a target
- *   instead of recalling one. Takes the same {@link IEvidenceGraphConfig}.
  *
  * @example <caption>Configure the plugin in `lint.config.ts`</caption>
  *   import type { ITtscLintConfig } from "@ttsc/lint";
@@ -67,7 +66,7 @@ export const evidence = {
     namespace: "evidence",
     version,
   } as const,
-  rules: ["graph", "singular", "documented", "targets"] as const,
+  rules: ["graph", "singular", "documented"] as const,
   source: path.resolve(__dirname, "..", "native"),
 } satisfies ITtscLintPlugin;
 export default evidence;

@@ -52,6 +52,18 @@ func (graphRule) Check(ctx *rule.ProjectContext) {
 	problems = append(problems, stateProblems...)
 	problems = append(problems, evaluateEvidenceGraph(states, loader)...)
 	reportProblems(ctx, problems)
+	if len(problems) == 0 {
+		// Published only on a clean evaluation, because the host reads state
+		// from a rule that passed and reporting anything marks this one failed
+		// (`linthost/hints.go:147-149`, `linthost/project_engine.go:68-77`).
+		// Setting it unconditionally would not widen the gate; it would only
+		// hide where the gate is.
+		ctx.SetState(graphCorpus{
+			Config:   config,
+			Markdown: markdown,
+			Swagger:  swagger,
+		})
+	}
 }
 
 func init() {

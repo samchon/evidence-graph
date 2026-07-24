@@ -1,76 +1,57 @@
 package evidence
 
 import (
-	"os"
 	"sort"
 
 	"github.com/samchon/ttsc/packages/lint/rule"
 )
 
-// targetsRule publishes the evidence targets an editor may complete.
+// graphCorpus is what a passing Check publishes for Hints to project.
 //
-// It exists as a second rule because a reporting rule cannot publish a corpus.
-// The host offers hints only for a project rule that passed, and
-// `ProjectContext.Report` marks a rule failed unconditionally, so a corpus
-// published by `evidence/graph` would be available exactly when every
-// obligation is already met — and would disappear the moment a new document
-// section created the need to write a citation. This rule therefore reports
-// nothing under any input; that silence is its contract, not an oversight.
-type targetsRule struct{}
-
-// targetsState is what Check publishes for Hints to project.
+// It carries the inventories Check already built rather than the paths to
+// rebuild them from. The graph loads Markdown and Swagger to do its own job, so
+// handing that result forward costs a build nothing; reloading inside Hints
+// would read every source a second time to answer a question the rule had just
+// finished answering.
 //
-// It carries the resolved root and the decoded configuration rather than the
-// loaded inventories, because Check runs during `ttsc check` and Hints does
-// not. Loading here would make every build pay for a Swagger spawn to serve an
-// editor that was not asking.
-type targetsState struct {
-	Root   string
-	Config graphConfig
+// What the editor path does pay is Check itself. A hints request runs a fresh
+// project cycle (`linthost/hints.go:74`), so every source the graph reads is
+// read again there — including an HTTP(S) Swagger reference, which is fetched.
+// That cost is inherent to answering from a current index rather than a stale
+// one, and it is bounded the same way a build is: a source that fails to load
+// is reported by Check, which fails the rule, which withdraws the corpus.
+type graphCorpus struct {
+	Config   graphConfig
+	Markdown map[string]*artifactInventory
+	Swagger  map[string]*artifactInventory
 }
 
-func (targetsRule) Name() string { return targetsRuleName }
-
-func (targetsRule) NeedsTypeChecker() bool { return false }
-
-func (targetsRule) Check(ctx *rule.ProjectContext) {
-	if ctx == nil {
-		return
-	}
-	config, problems := decodeGraphConfig(ctx.Options)
-	if len(problems) != 0 {
-		// Deliberately silent. A broken configuration publishes no state, which
-		// the host reads as an absent corpus, and `evidence/graph` is already
-		// the rule that tells the author what is wrong with it. Reporting here
-		// would say it twice and cost this rule the pass it needs.
-		return
-	}
-	root := evidenceProjectRoot(ctx.Identity)
-	if root == "" {
-		return
-	}
-	if info, err := os.Stat(root); err != nil || !info.IsDir() {
-		return
-	}
-	ctx.SetState(targetsState{Root: root, Config: config})
-}
-
-// Hints projects the configured evidence population into a completion corpus.
+// Hints projects the configured evidence population into editor completions.
 //
-// Loading happens here rather than in Check because the host never asks for
-// hints during `ttsc check`; the cost lands only on an editor request.
-func (targetsRule) Hints(ctx *rule.HintContext) []rule.Hint {
+// A target has to be reproduced exactly, and the anchor an author cannot recall
+// is the one this offers. The corpus is a value: the host serializes it and the
+// LSP proxy answers from cache long after the lint process exited, so nothing
+// here can be computed per keystroke.
+//
+// The corpus is available only while the graph passes, and that is a host gate
+// rather than a choice made here. `linthost/hints.go:147-149` skips a rule whose
+// snapshot is not `ProjectRulePassed` or whose state is nil, and
+// `projectReporter.Report` sets `failed = true` unconditionally
+// (`linthost/project_engine.go:68-77`). So the cycle that reports an unmet
+// obligation is the cycle that withdraws the completions — which is the cycle an
+// author is most likely to be writing a citation in. Nothing in this package can
+// widen that; it widens upstream, by letting a project rule publish state it
+// reported against.
+func (graphRule) Hints(ctx *rule.HintContext) []rule.Hint {
 	if ctx == nil {
 		return nil
 	}
-	state, published := ctx.State.(targetsState)
-	if !published || state.Root == "" {
+	corpus, published := ctx.State.(graphCorpus)
+	if !published {
 		return nil
 	}
-	markdown, _ := loadMarkdownInventories(state.Root, state.Config)
-	swagger, _ := loadSwaggerInventories(state.Root, state.Config)
-	units := selectedCompletionUnits(state.Config, markdown, swagger)
-	routes := selectsTypeScriptReference(state.Config)
+	units := selectedCompletionUnits(corpus.Config, corpus.Markdown, corpus.Swagger)
+	routes := selectsTypeScriptReference(corpus.Config)
 	hints := make([]rule.Hint, 0, (len(units)+1)*len(evidenceHintTriggers))
 	for _, trigger := range evidenceHintTriggers {
 		if routes {
@@ -85,6 +66,17 @@ func (targetsRule) Hints(ctx *rule.HintContext) []rule.Hint {
 		}
 	}
 	return hints
+}
+
+// evidenceHintTriggers names both tag positions a target can be written in.
+//
+// Each `After` ends where the target begins, which is what makes the text the
+// author has typed so far the editor's filter. The trailing space also keeps
+// the two apart: `"@evidence "` cannot occur inside `"@evidenceExclude "`,
+// because the character following `@evidence` there is `E`.
+var evidenceHintTriggers = []rule.HintTrigger{
+	{Scope: rule.HintScopeJSDoc, After: "@evidence "},
+	{Scope: rule.HintScopeJSDoc, After: "@evidenceExclude "},
 }
 
 // typeScriptRouteHint routes the author into TypeScript's own completion.
@@ -131,19 +123,6 @@ func selectsTypeScriptReference(config graphConfig) bool {
 	return false
 }
 
-func init() { rule.RegisterProject(targetsRule{}) }
-
-// evidenceHintTriggers names both tag positions a target can be written in.
-//
-// Each `After` ends where the target begins, which is what makes the text the
-// author has typed so far the editor's filter. The trailing space also keeps
-// the two apart: `"@evidence "` cannot occur inside `"@evidenceExclude "`,
-// because the character following `@evidence` there is `E`.
-var evidenceHintTriggers = []rule.HintTrigger{
-	{Scope: rule.HintScopeJSDoc, After: "@evidence "},
-	{Scope: rule.HintScopeJSDoc, After: "@evidenceExclude "},
-}
-
 // selectedCompletionUnits collects the units some configured reference selects,
 // in the order they should be offered.
 //
@@ -152,6 +131,19 @@ var evidenceHintTriggers = []rule.HintTrigger{
 // visible in the project tree nor guessable from its text, so selected headings
 // come first; a Markdown file path is typed as easily as it is read, so file
 // targets follow; Swagger operations come last, being both few and mechanical.
+//
+// Order therefore serves the author who is still browsing, and the filter
+// serves the one who is not. No hint sets Label, so the editor lists and
+// filters on the target itself: typing `docs/pricing` narrows to that
+// document's anchors, which is the flow this ranking is for — an author writes
+// a citation because they are implementing a document they have already chosen.
+//
+// Labelling a heading by its text would invert that. `sale` would match and
+// `docs/pricing` would match nothing, two documents sharing a heading would
+// become indistinguishable entries, and the listed text would stop being the
+// inserted text — three costs to serve recall-by-title, which Detail already
+// serves by being visible. Leaving Label empty keeps what is shown and what is
+// written identical by construction.
 //
 // TypeScript units are absent on purpose. TypeScript's own language service
 // completes symbols inside `{@link}` against the scope at the cursor, which a

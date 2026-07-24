@@ -34,14 +34,17 @@ func (reporter *capturedProjectReporter) SetState(state any) {
 	reporter.state = state
 }
 
-// runTargetsRule drives the corpus rule end to end and returns what it
-// published, together with anything it reported.
+// runGraphHints drives the graph rule and returns the corpus a consumer would
+// actually receive, together with whatever the rule reported.
 //
-// Both halves are returned because the rule's contract is that the second is
-// always empty: the host offers a corpus only for a project rule that passed,
-// so a case asserting hints without also asserting silence would pass against a
-// rule that had already disqualified itself.
-func runTargetsRule(
+// The gate is reproduced here rather than bypassed. `linthost/hints.go:147-149`
+// skips a rule whose snapshot is not `ProjectRulePassed` or whose state is nil,
+// and `projectReporter.Report` marks a rule failed unconditionally
+// (`linthost/project_engine.go:68-77`). Calling `Hints` directly would answer a
+// question no editor asks — what the rule *could* publish — while the behavior
+// under test is what an author sees, which is nothing on the cycle an
+// obligation goes unmet.
+func runGraphHints(
 	t *testing.T,
 	files map[string]string,
 	config string,
@@ -53,26 +56,43 @@ func runTargetsRule(
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
+	sources := []*shimast.SourceFile{}
 	for _, relative := range paths {
+		content := files[relative]
 		absolute := filepath.Join(root, filepath.FromSlash(relative))
 		if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(absolute, []byte(files[relative]), 0o644); err != nil {
+		if err := os.WriteFile(absolute, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		if !isTypeScriptTestPath(relative) {
+			continue
+		}
+		kind := shimcore.ScriptKindTS
+		if strings.HasSuffix(strings.ToLower(relative), ".tsx") {
+			kind = shimcore.ScriptKindTSX
+		}
+		sources = append(sources, shimparser.ParseSourceFile(
+			shimast.SourceFileParseOptions{FileName: filepath.ToSlash(absolute)},
+			content,
+			kind,
+		))
 	}
 	reporter := &capturedProjectReporter{}
 	context := rule.NewProjectContext(
 		rule.ProjectIdentity{PhysicalProjectRoot: root},
-		nil,
+		sources,
 		nil,
 		rule.SeverityError,
 		json.RawMessage(config),
 		reporter,
 	)
-	targetsRule{}.Check(context)
-	hints := targetsRule{}.Hints(&rule.HintContext{
+	graphRule{}.Check(context)
+	if reporter.failed || reporter.state == nil {
+		return nil, reporter.messages
+	}
+	hints := graphRule{}.Hints(&rule.HintContext{
 		Identity: rule.ProjectIdentity{PhysicalProjectRoot: root},
 		State:    reporter.state,
 		Severity: rule.SeverityError,

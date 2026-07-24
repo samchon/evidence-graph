@@ -52,6 +52,26 @@ const launcher = path.join(
   "ttsc.js",
 );
 
+// The plugin cannot register itself by name — it does not self-link — so its
+// own config imports the build output. Saying that here costs one check and
+// replaces a module-resolution failure raised inside a ttsc subprocess, where
+// nothing names the missing step.
+const builtDescriptor = path.join(
+  repositoryRoot,
+  "packages",
+  "evidence",
+  "lib",
+  "index.js",
+);
+if (!fs.existsSync(builtDescriptor)) {
+  console.error(
+    `evidence lint needs the plugin build.\n\n` +
+      `  missing: ${builtDescriptor}\n\n` +
+      `Run \`pnpm build\` first. \`pnpm test\` already does.`,
+  );
+  process.exit(1);
+}
+
 fs.mkdirSync(sharedCache, { recursive: true });
 const strayCacheBefore = fs.existsSync(defaultCache);
 
@@ -71,6 +91,11 @@ for (const project of projects) {
       timeout: 900_000,
     },
   );
+  // A spawn that never ran, or one the timeout killed, exits with a null status
+  // and prints nothing of its own — so the reason is named here rather than
+  // left as a bare non-zero exit.
+  if (result.error !== undefined)
+    console.error(`evidence lint could not run ttsc: ${result.error.message}`);
   if (result.status !== 0) failed = true;
 }
 

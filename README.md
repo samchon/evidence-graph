@@ -62,7 +62,7 @@ The first build can take several minutes; it links the rule into the lint binary
 ```ts
 // lint.config.ts
 import type { ITtscLintConfig } from "@ttsc/lint";
-import evidence, { type IEvidenceGraphConfig } from "@samchon/lint-plugin-evidence";
+import { evidence, type IEvidenceGraphConfig } from "@samchon/lint-plugin-evidence";
 
 const graph: IEvidenceGraphConfig = {
   claims: [
@@ -85,6 +85,7 @@ export default {
   },
   rules: {
     "evidence/graph": ["error", graph],
+    "evidence/singular": "error",
   },
 } satisfies ITtscLintConfig;
 ```
@@ -316,7 +317,7 @@ error TS12028: [evidence/singular] A file takes the name of its public identity,
 Found 1 error.
 ```
 
-The trade-off is anonymous default exports. `export default { ... }` has no name for its file to take, so the rule reports it — and that is the shape of nearly every config file, including `lint.config.ts` itself. Scope the rule with `files` as above, or accept that config files must name what they export.
+The trade-off is anonymous default exports. `export default { ... }` has no name for its file to take, so the rule reports it — the shape of nearly every config file. Keep config files out of the project's `include`, or name what they export.
 
 ## Concepts
 

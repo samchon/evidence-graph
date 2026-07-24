@@ -22,7 +22,7 @@ export const test_evidence_singular_accepts_merged_declarations = (): void => {
   const project: IEvidenceProject = createProject({
     name: "singular-merged",
     lintConfig: [
-      'import evidence from "@samchon/lint-plugin-evidence";',
+      'import { evidence } from "@samchon/lint-plugin-evidence";',
       "",
       "export default {",
       '  plugins: { "evidence": evidence },',

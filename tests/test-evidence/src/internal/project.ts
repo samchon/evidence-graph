@@ -19,6 +19,15 @@ export interface ICreateProjectProps {
   readonly files: Readonly<Record<string, string>>;
   /** Complete `lint.config.ts` source, evaluated by the real config loader. */
   readonly lintConfig: string;
+  /**
+   * Overrides the generated `tsconfig.json` `include` array.
+   *
+   * Program membership is a real variable in a consumer's setup, not a fixture
+   * detail: a file rule only ever sees what the project includes, so whether
+   * `lint.config.ts` is linted at all depends on this array. The default keeps
+   * the config file in the program.
+   */
+  readonly include?: readonly string[];
 }
 
 export interface IRunResult {
@@ -71,7 +80,7 @@ export const createProject = (props: ICreateProjectProps): IEvidenceProject => {
           noEmit: true,
           plugins: [{ transform: "@ttsc/lint" }],
         },
-        include: ["src", "lint.config.ts"],
+        include: props.include ?? ["src", "lint.config.ts"],
       },
       null,
       2,
